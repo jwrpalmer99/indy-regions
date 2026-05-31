@@ -1,0 +1,64 @@
+{
+  "indy-regions": {
+    "Controls": {
+      "PaintRegion": "Region malen"
+    },
+    "Settings": {
+      "DebugTimings": {
+        "Name": "Debug-Zeiten fuer Regionsmalen",
+        "Hint": "Protokolliert Zeitdetails fuer Maskenaufbau, Vorschauen und Speichern beim Regionsmalen."
+      },
+      "ShowPaintHelp": {
+        "Name": "Hilfe zum Regionsmalen anzeigen",
+        "Hint": "Zeigt den kurzen Maus- und Tastaturhilfetext im Dialog zum Regionsmalen."
+      }
+    },
+    "Dialog": {
+      "Title": {
+        "PaintRegion": "Region malen"
+      },
+      "Help": {
+        "Title": "Hilfe",
+        "ShiftDrag": "Umschalt-Ziehen entfernt gemalte Zellen.",
+        "CtrlClick": "Strg-Klick fuellt per HSL von der angeklickten Farbe.",
+        "CtrlShiftClick": "Strg-Umschalt-Klick entfernt per HSL von der angeklickten Farbe.",
+        "AltClick": "Alt-Klick fuellt die angeklickte Quellregionsform.",
+        "ShiftAltClick": "Umschalt-Alt-Klick entfernt die angeklickte Quellregionsform.",
+        "CtrlWheel": "Strg-Mausrad aendert die Pinselgroesse."
+      },
+      "Label": {
+        "Status": "Status",
+        "History": "Verlauf",
+        "PenColour": "Stiftfarbe",
+        "PaintOpacity": "Maldeckkraft",
+        "BrushSize": "Pinselgroesse",
+        "FillTolerance": "Fuelltoleranz",
+        "FillBridge": "Fuellbruecke",
+        "GridStep": "Rasterschritt",
+        "ShrinkGrow": "Schrumpfen / Wachsen",
+        "BorderSmooth": "Randglaettung",
+        "BorderThickness": "Randstaerke"
+      },
+      "Status": {
+        "Paint": "Male auf der Arbeitsflaeche, um die Region zu erweitern. Umschalt-linke Maustaste entfernt."
+      },
+      "Button": {
+        "Undo": "Rueckgaengig",
+        "Redo": "Wiederholen",
+        "CreateRegion": "Region erstellen",
+        "UpdateRegion": "Region aktualisieren",
+        "Cancel": "Abbrechen"
+      }
+    },
+    "Notifications": {
+      "GmOnlyPaint": "Nur SL koennen Regionen malen.",
+      "GmOnlyPainting": "Indy Regions | Regionsmalen ist nur fuer SL verfuegbar.",
+      "CanvasNotReady": "Indy Regions | Die Arbeitsflaeche ist nicht bereit.",
+      "SceneNotReadyForPainting": "Indy Regions | Die Szenenarbeitsflaeche ist noch nicht zum Regionsmalen bereit.",
+      "PaintAreaFirst": "Indy Regions | Male zuerst einen Bereich.",
+      "NoSourceShape": "Indy Regions | Unter dem Mauszeiger liegt keine Quellregionsform.",
+      "PaintingSelectedRegion": "Indy Regions | Ausgewaehlte Region wird bemalt. Linke Maustaste fuegt hinzu, Umschalt-links entfernt.",
+      "PaintRegion": "Indy Regions | Region malen. Linke Maustaste fuegt hinzu, Umschalt-links entfernt."
+    }
+  }
+}

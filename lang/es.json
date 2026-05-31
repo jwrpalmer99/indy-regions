@@ -1,0 +1,64 @@
+{
+  "indy-regions": {
+    "Controls": {
+      "PaintRegion": "Pintar región"
+    },
+    "Settings": {
+      "DebugTimings": {
+        "Name": "Depurar tiempos de pintado de regiones",
+        "Hint": "Registra tiempos de reconstrucción de máscaras, vistas previas y guardado del pintado de regiones."
+      },
+      "ShowPaintHelp": {
+        "Name": "Mostrar ayuda de pintado de regiones",
+        "Hint": "Muestra el texto breve de ayuda de ratón y teclado en el diálogo de pintado de regiones."
+      }
+    },
+    "Dialog": {
+      "Title": {
+        "PaintRegion": "Pintar región"
+      },
+      "Help": {
+        "Title": "Ayuda",
+        "ShiftDrag": "Mayús-arrastrar borra celdas pintadas.",
+        "CtrlClick": "Ctrl-clic rellena por HSL desde el color seleccionado.",
+        "CtrlShiftClick": "Ctrl-Mayús-clic borra por HSL desde el color seleccionado.",
+        "AltClick": "Alt-clic rellena la forma de región de origen seleccionada.",
+        "ShiftAltClick": "Mayús-Alt-clic borra la forma de región de origen seleccionada.",
+        "CtrlWheel": "Ctrl-rueda cambia el tamaño del pincel."
+      },
+      "Label": {
+        "Status": "Estado",
+        "History": "Historial",
+        "PenColour": "Color del pincel",
+        "PaintOpacity": "Opacidad de pintura",
+        "BrushSize": "Tamaño del pincel",
+        "FillTolerance": "Tolerancia de relleno",
+        "FillBridge": "Puente de relleno",
+        "GridStep": "Paso de cuadrícula",
+        "ShrinkGrow": "Reducir / ampliar",
+        "BorderSmooth": "Suavizado del borde",
+        "BorderThickness": "Grosor del borde"
+      },
+      "Status": {
+        "Paint": "Pinta en el lienzo para añadir a la región. Mayús-botón izquierdo resta."
+      },
+      "Button": {
+        "Undo": "Deshacer",
+        "Redo": "Rehacer",
+        "CreateRegion": "Crear región",
+        "UpdateRegion": "Actualizar región",
+        "Cancel": "Cancelar"
+      }
+    },
+    "Notifications": {
+      "GmOnlyPaint": "Solo los GM pueden pintar regiones.",
+      "GmOnlyPainting": "Indy Regions | El pintado de regiones es solo para GM.",
+      "CanvasNotReady": "Indy Regions | El lienzo no está listo.",
+      "SceneNotReadyForPainting": "Indy Regions | El lienzo de la escena no está listo para pintar regiones.",
+      "PaintAreaFirst": "Indy Regions | Pinta primero un área.",
+      "NoSourceShape": "Indy Regions | No hay una forma de región de origen bajo el cursor.",
+      "PaintingSelectedRegion": "Indy Regions | Pintando la región seleccionada. Botón izquierdo añade, Mayús-izquierdo resta.",
+      "PaintRegion": "Indy Regions | Pintar una región. Botón izquierdo añade, Mayús-izquierdo resta."
+    }
+  }
+}

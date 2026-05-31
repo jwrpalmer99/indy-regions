@@ -1,0 +1,64 @@
+{
+  "indy-regions": {
+    "Controls": {
+      "PaintRegion": "Pintar região"
+    },
+    "Settings": {
+      "DebugTimings": {
+        "Name": "Depurar tempos de pintura de regiões",
+        "Hint": "Registra tempos de reconstrução de máscaras, prévias e confirmações da pintura de regiões."
+      },
+      "ShowPaintHelp": {
+        "Name": "Mostrar ajuda da pintura de regiões",
+        "Hint": "Mostra o texto curto de ajuda de mouse e teclado na janela de pintura de regiões."
+      }
+    },
+    "Dialog": {
+      "Title": {
+        "PaintRegion": "Pintar região"
+      },
+      "Help": {
+        "Title": "Ajuda",
+        "ShiftDrag": "Shift-arrastar apaga células pintadas.",
+        "CtrlClick": "Ctrl-clique preenche por HSL a partir da cor clicada.",
+        "CtrlShiftClick": "Ctrl-Shift-clique apaga por HSL a partir da cor clicada.",
+        "AltClick": "Alt-clique preenche a forma de região de origem clicada.",
+        "ShiftAltClick": "Shift-Alt-clique apaga a forma de região de origem clicada.",
+        "CtrlWheel": "Ctrl-roda altera o tamanho do pincel."
+      },
+      "Label": {
+        "Status": "Status",
+        "History": "Histórico",
+        "PenColour": "Cor do pincel",
+        "PaintOpacity": "Opacidade da pintura",
+        "BrushSize": "Tamanho do pincel",
+        "FillTolerance": "Tolerância de preenchimento",
+        "FillBridge": "Ponte de preenchimento",
+        "GridStep": "Passo da grade",
+        "ShrinkGrow": "Reduzir / ampliar",
+        "BorderSmooth": "Suavização da borda",
+        "BorderThickness": "Espessura da borda"
+      },
+      "Status": {
+        "Paint": "Pinte no canvas para adicionar à região. Shift-botão esquerdo subtrai."
+      },
+      "Button": {
+        "Undo": "Desfazer",
+        "Redo": "Refazer",
+        "CreateRegion": "Criar região",
+        "UpdateRegion": "Atualizar região",
+        "Cancel": "Cancelar"
+      }
+    },
+    "Notifications": {
+      "GmOnlyPaint": "Apenas GMs podem pintar regiões.",
+      "GmOnlyPainting": "Indy Regions | A pintura de regiões é apenas para GMs.",
+      "CanvasNotReady": "Indy Regions | O canvas não está pronto.",
+      "SceneNotReadyForPainting": "Indy Regions | O canvas da cena não está pronto para pintar regiões.",
+      "PaintAreaFirst": "Indy Regions | Pinte uma área primeiro.",
+      "NoSourceShape": "Indy Regions | Não há forma de região de origem sob o cursor.",
+      "PaintingSelectedRegion": "Indy Regions | Pintando a região selecionada. Botão esquerdo adiciona, Shift-esquerdo subtrai.",
+      "PaintRegion": "Indy Regions | Pintar uma região. Botão esquerdo adiciona, Shift-esquerdo subtrai."
+    }
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "indy-regions": {
+    "Controls": {
+      "PaintRegion": "Paint Region"
+    },
+    "Settings": {
+      "DebugTimings": {
+        "Name": "Debug Region Paint Timings",
+        "Hint": "Log timing details for region paint mask rebuilds, previews, and commits."
+      },
+      "ShowPaintHelp": {
+        "Name": "Show Region Paint Help",
+        "Hint": "Show the short mouse/keyboard help text in the Region Paint dialog."
+      }
+    },
+    "Dialog": {
+      "Title": {
+        "PaintRegion": "Paint Region"
+      },
+      "Help": {
+        "Title": "Help",
+        "ShiftDrag": "Shift-drag erases painted cells.",
+        "CtrlClick": "Ctrl-click HSL-fills from the clicked colour.",
+        "CtrlShiftClick": "Ctrl-Shift-click HSL-erases from the clicked colour.",
+        "AltClick": "Alt-click fills the clicked source region shape.",
+        "ShiftAltClick": "Shift-Alt-click erases the clicked source region shape.",
+        "CtrlWheel": "Ctrl-wheel changes brush size."
+      },
+      "Label": {
+        "Status": "Status",
+        "History": "History",
+        "PenColour": "Pen Colour",
+        "PaintOpacity": "Paint Opacity",
+        "BrushSize": "Brush Size",
+        "FillTolerance": "Fill Tolerance",
+        "FillBridge": "Fill Bridge",
+        "GridStep": "Grid Step",
+        "ShrinkGrow": "Shrink / Grow",
+        "BorderSmooth": "Border Smooth",
+        "BorderThickness": "Border Thickness"
+      },
+      "Status": {
+        "Paint": "Paint on the canvas to add to the region. Shift-left mouse subtracts."
+      },
+      "Button": {
+        "Undo": "Undo",
+        "Redo": "Redo",
+        "CreateRegion": "Create Region",
+        "UpdateRegion": "Update Region",
+        "Cancel": "Cancel"
+      }
+    },
+    "Notifications": {
+      "GmOnlyPaint": "Only GMs can paint regions.",
+      "GmOnlyPainting": "Indy Regions | Region painting is GM-only.",
+      "CanvasNotReady": "Indy Regions | Canvas is not ready.",
+      "SceneNotReadyForPainting": "Indy Regions | Canvas scene is not ready for region painting.",
+      "PaintAreaFirst": "Indy Regions | Paint an area first.",
+      "NoSourceShape": "Indy Regions | No source region shape under the cursor.",
+      "PaintingSelectedRegion": "Indy Regions | Painting selected Region. Left mouse adds, Shift-left subtracts.",
+      "PaintRegion": "Indy Regions | Paint a Region. Left mouse adds, Shift-left subtracts."
+    }
+  }
+}

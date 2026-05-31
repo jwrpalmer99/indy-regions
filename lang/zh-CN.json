@@ -1,0 +1,64 @@
+{
+  "indy-regions": {
+    "Controls": {
+      "PaintRegion": "绘制区域"
+    },
+    "Settings": {
+      "DebugTimings": {
+        "Name": "调试区域绘制耗时",
+        "Hint": "记录区域绘制中遮罩重建、预览和提交的耗时。"
+      },
+      "ShowPaintHelp": {
+        "Name": "显示区域绘制帮助",
+        "Hint": "在区域绘制对话框中显示简短的鼠标和键盘帮助。"
+      }
+    },
+    "Dialog": {
+      "Title": {
+        "PaintRegion": "绘制区域"
+      },
+      "Help": {
+        "Title": "帮助",
+        "ShiftDrag": "Shift-拖动会擦除已绘制的单元格。",
+        "CtrlClick": "Ctrl-点击会从点击颜色进行 HSL 填充。",
+        "CtrlShiftClick": "Ctrl-Shift-点击会从点击颜色进行 HSL 擦除。",
+        "AltClick": "Alt-点击会填充点击的源区域形状。",
+        "ShiftAltClick": "Shift-Alt-点击会擦除点击的源区域形状。",
+        "CtrlWheel": "Ctrl-滚轮会更改笔刷大小。"
+      },
+      "Label": {
+        "Status": "状态",
+        "History": "历史",
+        "PenColour": "画笔颜色",
+        "PaintOpacity": "绘制不透明度",
+        "BrushSize": "画笔大小",
+        "FillTolerance": "填充容差",
+        "FillBridge": "填充连接",
+        "GridStep": "网格步长",
+        "ShrinkGrow": "收缩 / 扩张",
+        "BorderSmooth": "边界平滑",
+        "BorderThickness": "边界粗细"
+      },
+      "Status": {
+        "Paint": "在画布上绘制以添加到区域。Shift-左键会减去。"
+      },
+      "Button": {
+        "Undo": "撤销",
+        "Redo": "重做",
+        "CreateRegion": "创建区域",
+        "UpdateRegion": "更新区域",
+        "Cancel": "取消"
+      }
+    },
+    "Notifications": {
+      "GmOnlyPaint": "只有 GM 可以绘制区域。",
+      "GmOnlyPainting": "Indy Regions | 区域绘制仅限 GM 使用。",
+      "CanvasNotReady": "Indy Regions | 画布尚未就绪。",
+      "SceneNotReadyForPainting": "Indy Regions | 场景画布尚未准备好进行区域绘制。",
+      "PaintAreaFirst": "Indy Regions | 请先绘制一个区域。",
+      "NoSourceShape": "Indy Regions | 光标下没有源区域形状。",
+      "PaintingSelectedRegion": "Indy Regions | 正在绘制选中的区域。左键添加，Shift-左键减去。",
+      "PaintRegion": "Indy Regions | 绘制区域。左键添加，Shift-左键减去。"
+    }
+  }
+}

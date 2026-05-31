@@ -1,0 +1,64 @@
+{
+  "indy-regions": {
+    "Controls": {
+      "PaintRegion": "Peindre une région"
+    },
+    "Settings": {
+      "DebugTimings": {
+        "Name": "Déboguer les temps de peinture des régions",
+        "Hint": "Consigne les temps de reconstruction des masques, des aperçus et des validations de peinture."
+      },
+      "ShowPaintHelp": {
+        "Name": "Afficher l'aide de peinture des régions",
+        "Hint": "Affiche le court texte d'aide souris/clavier dans la boîte de dialogue de peinture."
+      }
+    },
+    "Dialog": {
+      "Title": {
+        "PaintRegion": "Peindre une région"
+      },
+      "Help": {
+        "Title": "Aide",
+        "ShiftDrag": "Maj-glisser efface les cellules peintes.",
+        "CtrlClick": "Ctrl-clic remplit en HSL depuis la couleur cliquée.",
+        "CtrlShiftClick": "Ctrl-Maj-clic efface en HSL depuis la couleur cliquée.",
+        "AltClick": "Alt-clic remplit la forme de région source cliquée.",
+        "ShiftAltClick": "Maj-Alt-clic supprime la forme de région source cliquée.",
+        "CtrlWheel": "Ctrl-molette modifie la taille du pinceau."
+      },
+      "Label": {
+        "Status": "État",
+        "History": "Historique",
+        "PenColour": "Couleur du pinceau",
+        "PaintOpacity": "Opacité de peinture",
+        "BrushSize": "Taille du pinceau",
+        "FillTolerance": "Tolérance de remplissage",
+        "FillBridge": "Pont de remplissage",
+        "GridStep": "Pas de grille",
+        "ShrinkGrow": "Réduire / agrandir",
+        "BorderSmooth": "Lissage du bord",
+        "BorderThickness": "Épaisseur du bord"
+      },
+      "Status": {
+        "Paint": "Peignez sur le canevas pour ajouter à la région. Maj-clic gauche soustrait."
+      },
+      "Button": {
+        "Undo": "Annuler",
+        "Redo": "Rétablir",
+        "CreateRegion": "Créer la région",
+        "UpdateRegion": "Mettre à jour la région",
+        "Cancel": "Annuler"
+      }
+    },
+    "Notifications": {
+      "GmOnlyPaint": "Seuls les MJ peuvent peindre des régions.",
+      "GmOnlyPainting": "Indy Regions | La peinture des régions est réservée aux MJ.",
+      "CanvasNotReady": "Indy Regions | Le canevas n'est pas prêt.",
+      "SceneNotReadyForPainting": "Indy Regions | Le canevas de la scène n'est pas prêt pour la peinture des régions.",
+      "PaintAreaFirst": "Indy Regions | Peignez d'abord une zone.",
+      "NoSourceShape": "Indy Regions | Aucune forme de région source sous le curseur.",
+      "PaintingSelectedRegion": "Indy Regions | Peinture de la région sélectionnée. Clic gauche ajoute, Maj-clic gauche soustrait.",
+      "PaintRegion": "Indy Regions | Peindre une région. Clic gauche ajoute, Maj-clic gauche soustrait."
+    }
+  }
+}

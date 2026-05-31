@@ -1,0 +1,16 @@
+{
+    "name": "indy-regions",
+    "version": "1.0.0",
+    "description": "A module for painting and editing Foundry regions.",
+    "main": "index.js",
+    "type": "module",
+    "scripts": {
+        "createSymlinks": "node ./tools/create-symlinks.mjs"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "js-yaml": "^4.1.1"
+    }
+}

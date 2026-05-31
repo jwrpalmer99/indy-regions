@@ -1,0 +1,64 @@
+{
+  "indy-regions": {
+    "Controls": {
+      "PaintRegion": "영역 칠하기"
+    },
+    "Settings": {
+      "DebugTimings": {
+        "Name": "영역 칠하기 타이밍 디버그",
+        "Hint": "영역 칠하기 마스크 재작성, 미리보기, 적용 단계의 시간을 로그로 남깁니다."
+      },
+      "ShowPaintHelp": {
+        "Name": "영역 칠하기 도움말 표시",
+        "Hint": "영역 칠하기 대화상자에 짧은 마우스/키보드 도움말을 표시합니다."
+      }
+    },
+    "Dialog": {
+      "Title": {
+        "PaintRegion": "영역 칠하기"
+      },
+      "Help": {
+        "Title": "도움말",
+        "ShiftDrag": "Shift-드래그로 칠한 셀을 지웁니다.",
+        "CtrlClick": "Ctrl-클릭으로 클릭한 색상에서 HSL 채우기를 합니다.",
+        "CtrlShiftClick": "Ctrl-Shift-클릭으로 클릭한 색상에서 HSL 지우기를 합니다.",
+        "AltClick": "Alt-클릭으로 클릭한 원본 영역 도형을 채웁니다.",
+        "ShiftAltClick": "Shift-Alt-클릭으로 클릭한 원본 영역 도형을 지웁니다.",
+        "CtrlWheel": "Ctrl-휠로 브러시 크기를 변경합니다."
+      },
+      "Label": {
+        "Status": "상태",
+        "History": "기록",
+        "PenColour": "펜 색상",
+        "PaintOpacity": "칠하기 불투명도",
+        "BrushSize": "브러시 크기",
+        "FillTolerance": "채우기 허용치",
+        "FillBridge": "채우기 연결",
+        "GridStep": "그리드 단계",
+        "ShrinkGrow": "축소 / 확장",
+        "BorderSmooth": "테두리 부드럽게",
+        "BorderThickness": "테두리 두께"
+      },
+      "Status": {
+        "Paint": "캔버스에 칠해 영역에 추가합니다. Shift-왼쪽 클릭은 뺍니다."
+      },
+      "Button": {
+        "Undo": "실행 취소",
+        "Redo": "다시 실행",
+        "CreateRegion": "영역 만들기",
+        "UpdateRegion": "영역 업데이트",
+        "Cancel": "취소"
+      }
+    },
+    "Notifications": {
+      "GmOnlyPaint": "GM만 영역을 칠할 수 있습니다.",
+      "GmOnlyPainting": "Indy Regions | 영역 칠하기는 GM 전용입니다.",
+      "CanvasNotReady": "Indy Regions | 캔버스가 준비되지 않았습니다.",
+      "SceneNotReadyForPainting": "Indy Regions | 장면 캔버스가 영역 칠하기 준비가 되지 않았습니다.",
+      "PaintAreaFirst": "Indy Regions | 먼저 영역을 칠하세요.",
+      "NoSourceShape": "Indy Regions | 커서 아래에 원본 영역 도형이 없습니다.",
+      "PaintingSelectedRegion": "Indy Regions | 선택한 영역을 칠하는 중입니다. 왼쪽 클릭은 추가, Shift-왼쪽 클릭은 빼기입니다.",
+      "PaintRegion": "Indy Regions | 영역을 칠합니다. 왼쪽 클릭은 추가, Shift-왼쪽 클릭은 빼기입니다."
+    }
+  }
+}

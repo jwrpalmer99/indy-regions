@@ -1,0 +1,64 @@
+{
+  "indy-regions": {
+    "Controls": {
+      "PaintRegion": "リージョンをペイント"
+    },
+    "Settings": {
+      "DebugTimings": {
+        "Name": "リージョンペイントのタイミングをデバッグ",
+        "Hint": "マスク再構築、プレビュー、確定処理のタイミングをログに出力します。"
+      },
+      "ShowPaintHelp": {
+        "Name": "リージョンペイントのヘルプを表示",
+        "Hint": "リージョンペイントダイアログにマウスとキーボードの短いヘルプを表示します。"
+      }
+    },
+    "Dialog": {
+      "Title": {
+        "PaintRegion": "リージョンをペイント"
+      },
+      "Help": {
+        "Title": "ヘルプ",
+        "ShiftDrag": "Shift+ドラッグでペイント済みセルを消去します。",
+        "CtrlClick": "Ctrl+クリックでクリックした色からHSL塗りつぶしを行います。",
+        "CtrlShiftClick": "Ctrl+Shift+クリックでクリックした色からHSL消去を行います。",
+        "AltClick": "Alt+クリックでクリックした元リージョン形状を塗りつぶします。",
+        "ShiftAltClick": "Shift+Alt+クリックでクリックした元リージョン形状を消去します。",
+        "CtrlWheel": "Ctrl+ホイールでブラシサイズを変更します。"
+      },
+      "Label": {
+        "Status": "状態",
+        "History": "履歴",
+        "PenColour": "ペン色",
+        "PaintOpacity": "ペイント不透明度",
+        "BrushSize": "ブラシサイズ",
+        "FillTolerance": "塗りつぶし許容値",
+        "FillBridge": "塗りつぶしブリッジ",
+        "GridStep": "グリッド間隔",
+        "ShrinkGrow": "縮小 / 拡張",
+        "BorderSmooth": "境界の滑らかさ",
+        "BorderThickness": "境界の太さ"
+      },
+      "Status": {
+        "Paint": "キャンバス上でペイントしてリージョンに追加します。Shift+左クリックで減算します。"
+      },
+      "Button": {
+        "Undo": "元に戻す",
+        "Redo": "やり直し",
+        "CreateRegion": "リージョンを作成",
+        "UpdateRegion": "リージョンを更新",
+        "Cancel": "キャンセル"
+      }
+    },
+    "Notifications": {
+      "GmOnlyPaint": "リージョンをペイントできるのはGMのみです。",
+      "GmOnlyPainting": "Indy Regions | リージョンペイントはGM専用です。",
+      "CanvasNotReady": "Indy Regions | キャンバスの準備ができていません。",
+      "SceneNotReadyForPainting": "Indy Regions | シーンキャンバスはリージョンペイントの準備ができていません。",
+      "PaintAreaFirst": "Indy Regions | 先に領域をペイントしてください。",
+      "NoSourceShape": "Indy Regions | カーソル下に元リージョン形状がありません。",
+      "PaintingSelectedRegion": "Indy Regions | 選択中のリージョンをペイント中です。左クリックで追加、Shift+左クリックで減算します。",
+      "PaintRegion": "Indy Regions | リージョンをペイントします。左クリックで追加、Shift+左クリックで減算します。"
+    }
+  }
+}
