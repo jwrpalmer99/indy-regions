@@ -142,9 +142,7 @@ export function getCurrentRegionSources(session, {
     add(currentTarget);
   }
 
-  if (Array.isArray(session?.candidate?.shapes) && session.candidate.shapes.length) {
-    add({ shapes: session.candidate.shapes });
-  } else if (session?.maskData?.mask) {
+  if (session?.maskData?.mask) {
     const candidate = candidateFromMask?.(session.maskData, normalizeOptions(session.options ?? {}));
     if (Array.isArray(candidate?.shapes) && candidate.shapes.length) add({ shapes: candidate.shapes });
   }

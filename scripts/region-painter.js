@@ -1125,7 +1125,7 @@ function maskFromRegionShapes(region, options = {}) {
 
 function findTargetRegionShapeAtPoint(session, point) {
     return findTargetRegionShapeAtPointInSources(session, point, {
-      candidateFromMask: (maskData, opts) => candidateFromMaskWithOptions(maskData, opts),
+      candidateFromMask: (maskData) => candidateFromMask(maskData, 0),
     });
   }
 
