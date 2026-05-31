@@ -1,37 +1,18 @@
-const PAINT_MASK_FLAG = "paintRegionMask";
-const REGION_SHADER_BEHAVIOR_TYPE = "indy-fx.indyFX";
-const LEGACY_REGION_SHADER_BEHAVIOR_TYPE = "indyFX";
-const PAINT_HISTORY_LIMIT = 40;
-const MIN_HOLE_LOOP_AREA_CELLS = 8;
-const SMALL_MORPH_RADIUS_CELLS = 3;
-const MAX_FILL_BRIDGE_PX = 20;
-const PAINT_REGION_DEFAULT_NAME = "Region";
-const DEBUG_TIMINGS_SETTING = "debugTimings";
-const SHOW_PAINT_HELP_SETTING = "showPaintHelp";
-const CARDINAL_DIRECTIONS = Object.freeze([
-  [-1, 0],
-  [1, 0],
-  [0, -1],
-  [0, 1],
-]);
-
-const DEFAULT_WATER_OPTIONS = Object.freeze({
-  tolerance: 28,
-  gridStep: 4,
-  fillColorMode: "rgb",
-  fillBridgePx: 0,
-  smoothing: 2.0,
-  featherShrinkPx: 0,
-  requireWaterLikeSeed: false,
-  requireWaterLikeFill: false,
-  minShapeArea: 24,
-  debug: false,
-  brushSizePx: 96,
-  paintColor: "#ff0000",
-  paintOpacity: 0.65,
-  hslFillBias: 0,
-  paintBorderThickness: 2,
-});
+import {
+  CARDINAL_DIRECTIONS,
+  DEBUG_TIMINGS_SETTING,
+  DEFAULT_WATER_OPTIONS,
+  LEGACY_REGION_SHADER_BEHAVIOR_TYPE,
+  MAX_FILL_BRIDGE_PX,
+  MIN_HOLE_LOOP_AREA_CELLS,
+  PAINT_HISTORY_LIMIT,
+  PAINT_MASK_FLAG,
+  PAINT_REGION_DEFAULT_NAME,
+  REGION_SHADER_BEHAVIOR_TYPE,
+  SHOW_PAINT_HELP_SETTING,
+  SMALL_MORPH_RADIUS_CELLS,
+} from "./region-painter-constants.js";
+import { renderPaintDialogContent } from "./region-painter-dialog.js";
 
 function toFiniteNumber(value, fallback) {
   const n = Number(value);
@@ -106,14 +87,6 @@ function formatText(moduleId, key, data = {}, fallback = key) {
   const value = game?.i18n?.format?.(fullKey, data);
   if (value && value !== fullKey) return value;
   return String(fallback).replace(/\{([^}]+)\}/g, (_match, name) => data?.[name] ?? "");
-}
-
-function escapeAttribute(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
 }
 
 function debugTiming(moduleId, label, payload = {}) {
@@ -3636,148 +3609,72 @@ export class WaterRegionDetector {
     return true;
   }
 
-  static #renderPaintSessionDialog(session) {
+  static async #renderPaintSessionDialog(session) {
     const opts = normalizeOptions(session.options);
     const debugStyle = debugUiDisplayStyle(WaterRegionDetector.#moduleId);
     const helpStyle = paintHelpDisplayStyle(WaterRegionDetector.#moduleId);
     const helpOpenAttr = getStoredPaintHelpOpen(WaterRegionDetector.#moduleId) ? " open" : "";
     const t = (key, fallback) => localizeText(WaterRegionDetector.#moduleId, key, fallback);
-    const title = (key, fallback) => escapeAttribute(t(key, fallback));
-    const content = `
-      <style>
-        .indy-regions-water-region-tool {
-          display: grid;
-          grid-template-columns: max-content minmax(16rem, 1fr);
-          gap: 0.25rem 0.6rem;
-          align-items: center;
-        }
-        .indy-regions-water-region-tool .form-group {
-          display: contents;
-        }
-        .indy-regions-water-region-tool label {
-          margin: 0;
-          white-space: nowrap;
-          align-self: center;
-        }
-        .indy-regions-water-region-tool .form-fields {
-          align-items: center;
-          display: grid;
-          gap: 0.35rem;
-          grid-template-columns: minmax(8rem, 1fr) 4.75rem;
-          margin: 0;
-        }
-        .indy-regions-water-region-tool input[type="number"] {
-          min-width: 0;
-          width: 4.75rem;
-        }
-        .indy-regions-water-region-tool input[type="color"] {
-          width: 4.75rem;
-        }
-        .indy-regions-water-region-tool .indy-full-row {
-          grid-column: 1 / -1;
-        }
-        .indy-regions-water-region-tool .indy-button-row {
-          display: flex;
-          gap: 0.35rem;
-        }
-      </style>
-      <form class="indy-regions-water-region-tool">
-        <details class="notes indy-full-row" data-paint-help${helpOpenAttr}${helpStyle}>
-          <summary>${t("Dialog.Help.Title", "Help")}</summary>
-          <div style="line-height: 1.35; margin-top: 0.35rem;">
-            <div>${t("Dialog.Help.ShiftDrag", "Shift-drag erases painted cells.")}</div>
-            <div>${t("Dialog.Help.CtrlClick", "Ctrl-click HSL-fills from the clicked colour.")}</div>
-            <div>${t("Dialog.Help.CtrlShiftClick", "Ctrl-Shift-click HSL-erases from the clicked colour.")}</div>
-            <div>${t("Dialog.Help.AltClick", "Alt-click fills the clicked source region shape.")}</div>
-            <div>${t("Dialog.Help.ShiftAltClick", "Shift-Alt-click erases the clicked source region shape.")}</div>
-            <div>${t("Dialog.Help.CtrlWheel", "Ctrl-wheel changes brush size.")}</div>
-          </div>
-        </details>
-        <div class="form-group indy-full-row"${debugStyle}>
-          <label>${t("Dialog.Label.Status", "Status")}</label>
-          <div class="form-fields">
-            <span data-water-status>${t("Dialog.Status.Paint", "Paint on the canvas to add to the region. Shift-left mouse subtracts.")}</span>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>${t("Dialog.Label.History", "History")}</label>
-          <div class="form-fields indy-button-row">
-            <button type="button" data-paint-action="undo" disabled><i class="fas fa-undo"></i> ${t("Dialog.Button.Undo", "Undo")}</button>
-            <button type="button" data-paint-action="redo" disabled><i class="fas fa-redo"></i> ${t("Dialog.Button.Redo", "Redo")}</button>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>${t("Dialog.Label.PenColour", "Pen Colour")}</label>
-          <div class="form-fields">
-            <input type="color" name="paintColor" value="${normalizeHexColor(opts.paintColor, DEFAULT_WATER_OPTIONS.paintColor)}">
-          </div>
-        </div>
-        <div class="form-group">
-          <label title="${title("Dialog.Hint.PaintOpacity", "0 transparent, 1 opaque.")}">${t("Dialog.Label.PaintOpacity", "Paint Opacity")}</label>
-          <div class="form-fields">
-            <input type="range" name="paintOpacity" min="0" max="1" step="0.05" value="${normalizePaintOpacity(opts.paintOpacity)}" title="${title("Dialog.Hint.PaintOpacity", "0 transparent, 1 opaque.")}">
-            <input type="number" name="paintOpacity" min="0" max="1" step="0.05" value="${normalizePaintOpacity(opts.paintOpacity)}" title="${title("Dialog.Hint.PaintOpacity", "0 transparent, 1 opaque.")}">
-          </div>
-        </div>
-        <div class="form-group">
-          <label title="${title("Dialog.Hint.BrushSize", "Brush diameter in pixels. Ctrl-wheel also changes this.")}">${t("Dialog.Label.BrushSize", "Brush Size")}</label>
-          <div class="form-fields">
-            <input type="range" name="brushSizePx" min="1" max="512" step="1" value="${opts.brushSizePx}" title="${title("Dialog.Hint.BrushSize", "Brush diameter in pixels. Ctrl-wheel also changes this.")}">
-            <input type="number" name="brushSizePx" min="1" max="512" step="1" value="${opts.brushSizePx}" title="${title("Dialog.Hint.BrushSize", "Brush diameter in pixels. Ctrl-wheel also changes this.")}">
-          </div>
-        </div>
-        <div class="form-group">
-          <label title="${title("Dialog.Hint.FillTolerance", "Lower is stricter, higher fills more similar colours.")}">${t("Dialog.Label.FillTolerance", "Fill Tolerance")}</label>
-          <div class="form-fields">
-            <input type="range" name="tolerance" min="1" max="160" step="1" value="${opts.tolerance}" title="${title("Dialog.Hint.FillTolerance", "Lower is stricter, higher fills more similar colours.")}">
-            <input type="number" name="tolerance" min="1" max="160" step="1" value="${opts.tolerance}" title="${title("Dialog.Hint.FillTolerance", "Lower is stricter, higher fills more similar colours.")}">
-          </div>
-        </div>
-        <div class="form-group">
-          <label title="${title("Dialog.Hint.HslFillBias", "-1 favors lightness, 0 balanced, 1 favors hue.")}">${t("Dialog.Label.HslFillBias", "HSL Fill Bias")}</label>
-          <div class="form-fields">
-            <input type="range" name="hslFillBias" min="-1" max="1" step="0.05" value="${normalizeHslFillBias(opts.hslFillBias)}" title="${title("Dialog.Hint.HslFillBias", "-1 favors lightness, 0 balanced, 1 favors hue.")}">
-            <input type="number" name="hslFillBias" min="-1" max="1" step="0.05" value="${normalizeHslFillBias(opts.hslFillBias)}" title="${title("Dialog.Hint.HslFillBias", "-1 favors lightness, 0 balanced, 1 favors hue.")}">
-          </div>
-        </div>
-        <div class="form-group">
-          <label title="${title("Dialog.Hint.FillBridge", "0 is strict; higher values cross small gaps.")}">${t("Dialog.Label.FillBridge", "Fill Bridge")}</label>
-          <div class="form-fields">
-            <input type="range" name="fillBridgePx" min="0" max="${MAX_FILL_BRIDGE_PX}" step="1" value="${opts.fillBridgePx}" title="${title("Dialog.Hint.FillBridge", "0 is strict; higher values cross small gaps.")}">
-            <input type="number" name="fillBridgePx" min="0" max="${MAX_FILL_BRIDGE_PX}" step="1" value="${opts.fillBridgePx}" title="${title("Dialog.Hint.FillBridge", "0 is strict; higher values cross small gaps.")}">
-          </div>
-        </div>
-        <input type="hidden" name="fillColorMode" value="hsl">
-        <div class="form-group">
-          <label title="${title("Dialog.Hint.GridStep", "1 is most precise; higher values are faster but coarser.")}">${t("Dialog.Label.GridStep", "Grid Step")}</label>
-          <div class="form-fields">
-            <input type="range" name="gridStep" min="1" max="16" step="1" value="${opts.gridStep}" title="${title("Dialog.Hint.GridStep", "1 is most precise; higher values are faster but coarser.")}">
-            <input type="number" name="gridStep" min="1" max="16" step="1" value="${opts.gridStep}" title="${title("Dialog.Hint.GridStep", "1 is most precise; higher values are faster but coarser.")}">
-          </div>
-        </div>
-        <div class="form-group">
-          <label title="${title("Dialog.Hint.ShrinkGrow", "Negative shrinks, positive grows the final boundary.")}">${t("Dialog.Label.ShrinkGrow", "Shrink / Grow")}</label>
-          <div class="form-fields">
-            <input type="range" name="featherShrinkPx" min="-64" max="64" step="1" value="${opts.featherShrinkPx}" title="${title("Dialog.Hint.ShrinkGrow", "Negative shrinks, positive grows the final boundary.")}">
-            <input type="number" name="featherShrinkPx" min="-64" max="64" step="1" value="${opts.featherShrinkPx}" title="${title("Dialog.Hint.ShrinkGrow", "Negative shrinks, positive grows the final boundary.")}">
-          </div>
-        </div>
-        <div class="form-group">
-          <label title="${title("Dialog.Hint.BorderSmooth", "0 keeps detail; higher values simplify jagged edges.")}">${t("Dialog.Label.BorderSmooth", "Border Smooth")}</label>
-          <div class="form-fields">
-            <input type="range" name="smoothing" min="0" max="16" step="0.25" value="${opts.smoothing}" title="${title("Dialog.Hint.BorderSmooth", "0 keeps detail; higher values simplify jagged edges.")}">
-            <input type="number" name="smoothing" min="0" max="16" step="0.25" value="${opts.smoothing}" title="${title("Dialog.Hint.BorderSmooth", "0 keeps detail; higher values simplify jagged edges.")}">
-          </div>
-        </div>
-        <div class="form-group">
-          <label title="${title("Dialog.Hint.BorderThickness", "0 hides live borders; thicker values make them easier to see.")}">${t("Dialog.Label.BorderThickness", "Border Thickness")}</label>
-          <div class="form-fields">
-            <input type="range" name="paintBorderThickness" min="0" max="4" step="0.25" value="${opts.paintBorderThickness}" title="${title("Dialog.Hint.BorderThickness", "0 hides live borders; thicker values make them easier to see.")}">
-            <input type="number" name="paintBorderThickness" min="0" max="4" step="0.25" value="${opts.paintBorderThickness}" title="${title("Dialog.Hint.BorderThickness", "0 hides live borders; thicker values make them easier to see.")}">
-          </div>
-        </div>
-      </form>
-    `;
+    const content = await renderPaintDialogContent({
+      helpOpenAttr,
+      helpStyle,
+      debugStyle,
+      maxFillBridgePx: MAX_FILL_BRIDGE_PX,
+      help: {
+        title: t("Dialog.Help.Title", "Help"),
+        shiftDrag: t("Dialog.Help.ShiftDrag", "Shift-drag erases painted cells."),
+        ctrlClick: t("Dialog.Help.CtrlClick", "Ctrl-click HSL-fills from the clicked colour."),
+        ctrlShiftClick: t("Dialog.Help.CtrlShiftClick", "Ctrl-Shift-click HSL-erases from the clicked colour."),
+        altClick: t("Dialog.Help.AltClick", "Alt-click fills the clicked source region shape."),
+        shiftAltClick: t("Dialog.Help.ShiftAltClick", "Shift-Alt-click erases the clicked source region shape."),
+        ctrlWheel: t("Dialog.Help.CtrlWheel", "Ctrl-wheel changes brush size."),
+      },
+      labels: {
+        status: t("Dialog.Label.Status", "Status"),
+        history: t("Dialog.Label.History", "History"),
+        penColour: t("Dialog.Label.PenColour", "Pen Colour"),
+        paintOpacity: t("Dialog.Label.PaintOpacity", "Paint Opacity"),
+        brushSize: t("Dialog.Label.BrushSize", "Brush Size"),
+        fillTolerance: t("Dialog.Label.FillTolerance", "Fill Tolerance"),
+        hslFillBias: t("Dialog.Label.HslFillBias", "HSL Fill Bias"),
+        fillBridge: t("Dialog.Label.FillBridge", "Fill Bridge"),
+        gridStep: t("Dialog.Label.GridStep", "Grid Step"),
+        shrinkGrow: t("Dialog.Label.ShrinkGrow", "Shrink / Grow"),
+        borderSmooth: t("Dialog.Label.BorderSmooth", "Border Smooth"),
+        borderThickness: t("Dialog.Label.BorderThickness", "Border Thickness"),
+      },
+      status: {
+        paint: t("Dialog.Status.Paint", "Paint on the canvas to add to the region. Shift-left mouse subtracts."),
+      },
+      buttons: {
+        undo: t("Dialog.Button.Undo", "Undo"),
+        redo: t("Dialog.Button.Redo", "Redo"),
+      },
+      hints: {
+        paintOpacity: t("Dialog.Hint.PaintOpacity", "0 transparent, 1 opaque."),
+        brushSize: t("Dialog.Hint.BrushSize", "Brush diameter in pixels. Ctrl-wheel also changes this."),
+        fillTolerance: t("Dialog.Hint.FillTolerance", "Lower is stricter, higher fills more similar colours."),
+        hslFillBias: t("Dialog.Hint.HslFillBias", "-1 favors lightness, 0 balanced, 1 favors hue."),
+        fillBridge: t("Dialog.Hint.FillBridge", "0 is strict; higher values cross small gaps."),
+        gridStep: t("Dialog.Hint.GridStep", "1 is most precise; higher values are faster but coarser."),
+        shrinkGrow: t("Dialog.Hint.ShrinkGrow", "Negative shrinks, positive grows the final boundary."),
+        borderSmooth: t("Dialog.Hint.BorderSmooth", "0 keeps detail; higher values simplify jagged edges."),
+        borderThickness: t("Dialog.Hint.BorderThickness", "0 hides live borders; thicker values make them easier to see."),
+      },
+      values: {
+        paintColor: normalizeHexColor(opts.paintColor, DEFAULT_WATER_OPTIONS.paintColor),
+        paintOpacity: normalizePaintOpacity(opts.paintOpacity),
+        brushSizePx: opts.brushSizePx,
+        tolerance: opts.tolerance,
+        hslFillBias: normalizeHslFillBias(opts.hslFillBias),
+        fillBridgePx: opts.fillBridgePx,
+        gridStep: opts.gridStep,
+        featherShrinkPx: opts.featherShrinkPx,
+        smoothing: opts.smoothing,
+        paintBorderThickness: opts.paintBorderThickness,
+      },
+    });
+    if (WaterRegionDetector.#activeSession !== session) return;
 
     const dialog = new foundry.applications.api.DialogV2({
       window: {
@@ -4076,7 +3973,11 @@ export class WaterRegionDetector {
     canvas.stage.on("pointerup", session.onUp);
     canvas.stage.on("pointerupoutside", session.onUp);
     window.addEventListener("keydown", session.onKeyDown, true);
-    WaterRegionDetector.#renderPaintSessionDialog(session);
+    void WaterRegionDetector.#renderPaintSessionDialog(session).catch((err) => {
+      console.error("Indy Regions | Failed to render paint dialog", err);
+      ui?.notifications?.error?.("Indy Regions | Failed to render paint dialog.");
+      WaterRegionDetector.#endSession({ notify: false });
+    });
     if (session.candidate || WaterRegionDetector.#getMaskBounds(session.maskData)) {
       WaterRegionDetector.#setPaintMaskPreview(session);
       WaterRegionDetector.#drawSessionDebug(session);

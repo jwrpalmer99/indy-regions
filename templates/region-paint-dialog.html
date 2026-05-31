@@ -1,0 +1,146 @@
+<style>
+  .indy-regions-water-region-tool {
+    display: grid;
+    grid-template-columns: max-content minmax(16rem, 1fr);
+    gap: 0.25rem 0.6rem;
+    align-items: center;
+  }
+  .indy-regions-water-region-tool .form-group {
+    display: contents;
+  }
+  .indy-regions-water-region-tool label {
+    margin: 0;
+    white-space: nowrap;
+    align-self: center;
+  }
+  .indy-regions-water-region-tool .form-fields {
+    align-items: center;
+    display: grid;
+    gap: 0.35rem;
+    grid-template-columns: minmax(8rem, 1fr) 4.75rem;
+    margin: 0;
+  }
+  .indy-regions-water-region-tool input[type="number"] {
+    min-width: 0;
+    width: 4.75rem;
+  }
+  .indy-regions-water-region-tool input[type="color"] {
+    width: 4.75rem;
+  }
+  .indy-regions-water-region-tool .indy-full-row {
+    grid-column: 1 / -1;
+  }
+  .indy-regions-water-region-tool .indy-button-row {
+    display: flex;
+    gap: 0.35rem;
+  }
+</style>
+<form class="indy-regions-water-region-tool">
+  <details class="notes indy-full-row" data-paint-help{{{helpOpenAttr}}}{{{helpStyle}}}>
+    <summary>{{help.title}}</summary>
+    <div style="line-height: 1.35; margin-top: 0.35rem;">
+      <div>{{help.shiftDrag}}</div>
+      <div>{{help.ctrlClick}}</div>
+      <div>{{help.ctrlShiftClick}}</div>
+      <div>{{help.altClick}}</div>
+      <div>{{help.shiftAltClick}}</div>
+      <div>{{help.ctrlWheel}}</div>
+    </div>
+  </details>
+
+  <div class="form-group indy-full-row"{{{debugStyle}}}>
+    <label>{{labels.status}}</label>
+    <div class="form-fields">
+      <span data-water-status>{{status.paint}}</span>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label>{{labels.history}}</label>
+    <div class="form-fields indy-button-row">
+      <button type="button" data-paint-action="undo" disabled><i class="fas fa-undo"></i> {{buttons.undo}}</button>
+      <button type="button" data-paint-action="redo" disabled><i class="fas fa-redo"></i> {{buttons.redo}}</button>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label>{{labels.penColour}}</label>
+    <div class="form-fields">
+      <input type="color" name="paintColor" value="{{values.paintColor}}">
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label title="{{hints.paintOpacity}}">{{labels.paintOpacity}}</label>
+    <div class="form-fields">
+      <input type="range" name="paintOpacity" min="0" max="1" step="0.05" value="{{values.paintOpacity}}" title="{{hints.paintOpacity}}">
+      <input type="number" name="paintOpacity" min="0" max="1" step="0.05" value="{{values.paintOpacity}}" title="{{hints.paintOpacity}}">
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label title="{{hints.brushSize}}">{{labels.brushSize}}</label>
+    <div class="form-fields">
+      <input type="range" name="brushSizePx" min="1" max="512" step="1" value="{{values.brushSizePx}}" title="{{hints.brushSize}}">
+      <input type="number" name="brushSizePx" min="1" max="512" step="1" value="{{values.brushSizePx}}" title="{{hints.brushSize}}">
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label title="{{hints.fillTolerance}}">{{labels.fillTolerance}}</label>
+    <div class="form-fields">
+      <input type="range" name="tolerance" min="1" max="160" step="1" value="{{values.tolerance}}" title="{{hints.fillTolerance}}">
+      <input type="number" name="tolerance" min="1" max="160" step="1" value="{{values.tolerance}}" title="{{hints.fillTolerance}}">
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label title="{{hints.hslFillBias}}">{{labels.hslFillBias}}</label>
+    <div class="form-fields">
+      <input type="range" name="hslFillBias" min="-1" max="1" step="0.05" value="{{values.hslFillBias}}" title="{{hints.hslFillBias}}">
+      <input type="number" name="hslFillBias" min="-1" max="1" step="0.05" value="{{values.hslFillBias}}" title="{{hints.hslFillBias}}">
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label title="{{hints.fillBridge}}">{{labels.fillBridge}}</label>
+    <div class="form-fields">
+      <input type="range" name="fillBridgePx" min="0" max="{{maxFillBridgePx}}" step="1" value="{{values.fillBridgePx}}" title="{{hints.fillBridge}}">
+      <input type="number" name="fillBridgePx" min="0" max="{{maxFillBridgePx}}" step="1" value="{{values.fillBridgePx}}" title="{{hints.fillBridge}}">
+    </div>
+  </div>
+
+  <input type="hidden" name="fillColorMode" value="hsl">
+
+  <div class="form-group">
+    <label title="{{hints.gridStep}}">{{labels.gridStep}}</label>
+    <div class="form-fields">
+      <input type="range" name="gridStep" min="1" max="16" step="1" value="{{values.gridStep}}" title="{{hints.gridStep}}">
+      <input type="number" name="gridStep" min="1" max="16" step="1" value="{{values.gridStep}}" title="{{hints.gridStep}}">
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label title="{{hints.shrinkGrow}}">{{labels.shrinkGrow}}</label>
+    <div class="form-fields">
+      <input type="range" name="featherShrinkPx" min="-64" max="64" step="1" value="{{values.featherShrinkPx}}" title="{{hints.shrinkGrow}}">
+      <input type="number" name="featherShrinkPx" min="-64" max="64" step="1" value="{{values.featherShrinkPx}}" title="{{hints.shrinkGrow}}">
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label title="{{hints.borderSmooth}}">{{labels.borderSmooth}}</label>
+    <div class="form-fields">
+      <input type="range" name="smoothing" min="0" max="16" step="0.25" value="{{values.smoothing}}" title="{{hints.borderSmooth}}">
+      <input type="number" name="smoothing" min="0" max="16" step="0.25" value="{{values.smoothing}}" title="{{hints.borderSmooth}}">
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label title="{{hints.borderThickness}}">{{labels.borderThickness}}</label>
+    <div class="form-fields">
+      <input type="range" name="paintBorderThickness" min="0" max="4" step="0.25" value="{{values.paintBorderThickness}}" title="{{hints.borderThickness}}">
+      <input type="number" name="paintBorderThickness" min="0" max="4" step="0.25" value="{{values.paintBorderThickness}}" title="{{hints.borderThickness}}">
+    </div>
+  </div>
+</form>
