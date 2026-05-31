@@ -33,11 +33,23 @@
         "PaintOpacity": "Opacité de peinture",
         "BrushSize": "Taille du pinceau",
         "FillTolerance": "Tolérance de remplissage",
+        "HslFillBias": "Biais de remplissage HSL",
         "FillBridge": "Pont de remplissage",
         "GridStep": "Pas de grille",
         "ShrinkGrow": "Réduire / agrandir",
         "BorderSmooth": "Lissage du bord",
         "BorderThickness": "Épaisseur du bord"
+      },
+      "Hint": {
+        "PaintOpacity": "0 transparent, 1 opaque.",
+        "BrushSize": "Diamètre du pinceau en pixels. Ctrl-molette le modifie aussi.",
+        "FillTolerance": "Plus bas est plus strict; plus haut remplit plus de couleurs proches.",
+        "HslFillBias": "-1 favorise la luminosité, 0 équilibré, 1 favorise la teinte.",
+        "FillBridge": "0 est strict; les valeurs plus hautes franchissent de petits espaces.",
+        "GridStep": "1 est le plus précis; les valeurs plus hautes sont plus rapides mais plus grossières.",
+        "ShrinkGrow": "Négatif réduit, positif agrandit le contour final.",
+        "BorderSmooth": "0 conserve les détails; les valeurs plus hautes simplifient les bords irréguliers.",
+        "BorderThickness": "0 masque les bords en direct; les valeurs plus hautes les rendent plus visibles."
       },
       "Status": {
         "Paint": "Peignez sur le canevas pour ajouter à la région. Maj-clic gauche soustrait."

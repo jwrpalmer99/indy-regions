@@ -33,11 +33,23 @@
         "PaintOpacity": "Maldeckkraft",
         "BrushSize": "Pinselgroesse",
         "FillTolerance": "Fuelltoleranz",
+        "HslFillBias": "HSL-Fuellgewichtung",
         "FillBridge": "Fuellbruecke",
         "GridStep": "Rasterschritt",
         "ShrinkGrow": "Schrumpfen / Wachsen",
         "BorderSmooth": "Randglaettung",
         "BorderThickness": "Randstaerke"
+      },
+      "Hint": {
+        "PaintOpacity": "0 transparent, 1 deckend.",
+        "BrushSize": "Pinseldurchmesser in Pixeln. Strg-Mausrad aendert ihn ebenfalls.",
+        "FillTolerance": "Niedriger ist strenger, hoeher fuellt mehr aehnliche Farben.",
+        "HslFillBias": "-1 bevorzugt Helligkeit, 0 ist ausgeglichen, 1 bevorzugt Farbton.",
+        "FillBridge": "0 ist streng; hoehere Werte ueberbruecken kleine Luecken.",
+        "GridStep": "1 ist am genauesten; hoehere Werte sind schneller, aber grober.",
+        "ShrinkGrow": "Negativ schrumpft, positiv vergroessert die finale Grenze.",
+        "BorderSmooth": "0 behaelt Details; hoehere Werte vereinfachen gezackte Kanten.",
+        "BorderThickness": "0 blendet Live-Raender aus; hoehere Werte machen sie sichtbarer."
       },
       "Status": {
         "Paint": "Male auf der Arbeitsflaeche, um die Region zu erweitern. Umschalt-linke Maustaste entfernt."

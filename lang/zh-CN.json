@@ -33,11 +33,23 @@
         "PaintOpacity": "绘制不透明度",
         "BrushSize": "画笔大小",
         "FillTolerance": "填充容差",
+        "HslFillBias": "HSL 填充偏向",
         "FillBridge": "填充连接",
         "GridStep": "网格步长",
         "ShrinkGrow": "收缩 / 扩张",
         "BorderSmooth": "边界平滑",
         "BorderThickness": "边界粗细"
+      },
+      "Hint": {
+        "PaintOpacity": "0 为透明，1 为不透明。",
+        "BrushSize": "画笔直径，以像素为单位。Ctrl-滚轮也会更改此值。",
+        "FillTolerance": "较低更严格；较高会填充更多相近颜色。",
+        "HslFillBias": "-1 偏向亮度，0 平衡，1 偏向色相。",
+        "FillBridge": "0 为严格；较高值会跨过小间隙。",
+        "GridStep": "1 最精确；较高值更快但更粗糙。",
+        "ShrinkGrow": "负值收缩，正值扩张最终边界。",
+        "BorderSmooth": "0 保留细节；较高值会简化锯齿边缘。",
+        "BorderThickness": "0 隐藏实时边界；较高值更容易看见。"
       },
       "Status": {
         "Paint": "在画布上绘制以添加到区域。Shift-左键会减去。"

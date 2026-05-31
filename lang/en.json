@@ -33,11 +33,23 @@
         "PaintOpacity": "Paint Opacity",
         "BrushSize": "Brush Size",
         "FillTolerance": "Fill Tolerance",
+        "HslFillBias": "HSL Fill Bias",
         "FillBridge": "Fill Bridge",
         "GridStep": "Grid Step",
         "ShrinkGrow": "Shrink / Grow",
         "BorderSmooth": "Border Smooth",
         "BorderThickness": "Border Thickness"
+      },
+      "Hint": {
+        "PaintOpacity": "0 transparent, 1 opaque.",
+        "BrushSize": "Brush diameter in pixels. Ctrl-wheel also changes this.",
+        "FillTolerance": "Lower is stricter, higher fills more similar colours.",
+        "HslFillBias": "-1 favors lightness, 0 balanced, 1 favors hue.",
+        "FillBridge": "0 is strict; higher values cross small gaps.",
+        "GridStep": "1 is most precise; higher values are faster but coarser.",
+        "ShrinkGrow": "Negative shrinks, positive grows the final boundary.",
+        "BorderSmooth": "0 keeps detail; higher values simplify jagged edges.",
+        "BorderThickness": "0 hides live borders; thicker values make them easier to see."
       },
       "Status": {
         "Paint": "Paint on the canvas to add to the region. Shift-left mouse subtracts."

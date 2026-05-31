@@ -33,11 +33,23 @@
         "PaintOpacity": "Opacità pittura",
         "BrushSize": "Dimensione pennello",
         "FillTolerance": "Tolleranza riempimento",
+        "HslFillBias": "Bilanciamento riempimento HSL",
         "FillBridge": "Ponte riempimento",
         "GridStep": "Passo griglia",
         "ShrinkGrow": "Riduci / espandi",
         "BorderSmooth": "Smussatura bordo",
         "BorderThickness": "Spessore bordo"
+      },
+      "Hint": {
+        "PaintOpacity": "0 trasparente, 1 opaco.",
+        "BrushSize": "Diametro del pennello in pixel. Ctrl-rotella lo cambia anche.",
+        "FillTolerance": "Più basso è più rigoroso; più alto riempie più colori simili.",
+        "HslFillBias": "-1 favorisce luminosità, 0 bilanciato, 1 favorisce tonalità.",
+        "FillBridge": "0 è rigoroso; valori più alti attraversano piccoli spazi.",
+        "GridStep": "1 è più preciso; valori più alti sono più rapidi ma più grossolani.",
+        "ShrinkGrow": "Negativo riduce, positivo espande il bordo finale.",
+        "BorderSmooth": "0 conserva i dettagli; valori più alti semplificano bordi frastagliati.",
+        "BorderThickness": "0 nasconde i bordi live; valori più alti li rendono più visibili."
       },
       "Status": {
         "Paint": "Dipingi sul canvas per aggiungere alla regione. Maiusc-tasto sinistro sottrae."

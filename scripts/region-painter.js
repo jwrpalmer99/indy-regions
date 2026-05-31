@@ -29,6 +29,7 @@ const DEFAULT_WATER_OPTIONS = Object.freeze({
   brushSizePx: 96,
   paintColor: "#ff0000",
   paintOpacity: 0.65,
+  hslFillBias: 0,
   paintBorderThickness: 2,
 });
 
@@ -105,6 +106,14 @@ function formatText(moduleId, key, data = {}, fallback = key) {
   const value = game?.i18n?.format?.(fullKey, data);
   if (value && value !== fullKey) return value;
   return String(fallback).replace(/\{([^}]+)\}/g, (_match, name) => data?.[name] ?? "");
+}
+
+function escapeAttribute(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 function debugTiming(moduleId, label, payload = {}) {
@@ -376,6 +385,10 @@ function normalizePaintOpacity(value, fallback = DEFAULT_WATER_OPTIONS.paintOpac
   return clamp(toFiniteNumber(value, fallback), 0, 1);
 }
 
+function normalizeHslFillBias(value, fallback = DEFAULT_WATER_OPTIONS.hslFillBias) {
+  return clamp(toFiniteNumber(value, fallback), -1, 1);
+}
+
 function rgbToWaterScore(r, g, b) {
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
@@ -569,6 +582,7 @@ function setStoredPaintOptions(moduleId, options = {}) {
       fillColorMode: String(options.fillColorMode ?? DEFAULT_WATER_OPTIONS.fillColorMode).trim().toLowerCase() === "hsl" ? "hsl" : "rgb",
       paintColor: normalizeHexColor(options.paintColor, DEFAULT_WATER_OPTIONS.paintColor),
       paintOpacity: normalizePaintOpacity(options.paintOpacity),
+      hslFillBias: normalizeHslFillBias(options.hslFillBias),
       paintBorderThickness: clamp(toFiniteNumber(options.paintBorderThickness, DEFAULT_WATER_OPTIONS.paintBorderThickness), 0, 4),
     };
     globalThis.localStorage?.setItem?.(`${moduleId}.paintRegionOptions`, JSON.stringify(stored));
@@ -891,6 +905,86 @@ function pointInRegionShape(point, shape) {
     }
 
     const bounds = normalizeRectBounds(data);
+    if (!bounds) return false;
+    const cx = (bounds.minX + bounds.maxX) * 0.5;
+    const cy = (bounds.minY + bounds.maxY) * 0.5;
+    const rx = Math.max(0.0001, (bounds.maxX - bounds.minX) * 0.5);
+    const ry = Math.max(0.0001, (bounds.maxY - bounds.minY) * 0.5);
+    const nx = (point.x - cx) / rx;
+    const ny = (point.y - cy) / ry;
+    return ((nx * nx) + (ny * ny)) <= 1;
+  }
+
+  return false;
+}
+
+function prepareRegionShape(shape) {
+  const data = regionShapeToObject(shape);
+  if (!data) return null;
+  const type = String(data.type ?? data.shape ?? data.kind ?? "").toLowerCase();
+  const prepared = {
+    data,
+    type,
+    bounds: regionShapeBounds(data),
+    isHole: isRegionShapeHole(data),
+    polygon: null,
+    rectBounds: null,
+  };
+
+  if (type === "polygon" || Array.isArray(data.points)) {
+    prepared.polygon = normalizeRegionShapePoints(data);
+    if (prepared.polygon.length < 3) return null;
+    prepared.bounds = prepared.bounds ?? pointsBounds(prepared.polygon);
+  } else if (type === "rectangle" || type === "rect" || type === "ellipse" || type === "oval" || type === "circle") {
+    prepared.rectBounds = normalizeRectBounds(data);
+    if (!prepared.rectBounds) return null;
+    prepared.bounds = prepared.bounds ?? {
+      minX: prepared.rectBounds.minX,
+      minY: prepared.rectBounds.minY,
+      maxX: prepared.rectBounds.maxX,
+      maxY: prepared.rectBounds.maxY,
+      width: prepared.rectBounds.maxX - prepared.rectBounds.minX,
+      height: prepared.rectBounds.maxY - prepared.rectBounds.minY,
+    };
+  } else {
+    return null;
+  }
+
+  return prepared.bounds ? prepared : null;
+}
+
+function pointInPreparedRegionShape(point, prepared) {
+  if (!point || !prepared) return false;
+  const bounds = prepared.bounds;
+  if (bounds && (point.x < bounds.minX || point.x > bounds.maxX || point.y < bounds.minY || point.y > bounds.maxY)) return false;
+  if (prepared.polygon) return pointInPolygon(point, prepared.polygon);
+
+  const data = prepared.data;
+  const type = prepared.type;
+  if (type === "rectangle" || type === "rect") {
+    const bounds = prepared.rectBounds;
+    return Boolean(bounds
+      && point.x >= bounds.minX
+      && point.x <= bounds.maxX
+      && point.y >= bounds.minY
+      && point.y <= bounds.maxY);
+  }
+
+  if (type === "ellipse" || type === "oval" || type === "circle") {
+    const radius = readShapeNumber(data, ["radius", "r"]);
+    const radiusX = readShapeNumber(data, ["radiusX", "rx"], radius);
+    const radiusY = readShapeNumber(data, ["radiusY", "ry"], radius);
+    if (Number.isFinite(radiusX) && Number.isFinite(radiusY) && radiusX > 0 && radiusY > 0) {
+      const cx = readShapeNumber(data, ["centerX", "cx"], readShapeNumber(data, ["x"]));
+      const cy = readShapeNumber(data, ["centerY", "cy"], readShapeNumber(data, ["y"]));
+      if (Number.isFinite(cx) && Number.isFinite(cy)) {
+        const nx = (point.x - cx) / radiusX;
+        const ny = (point.y - cy) / radiusY;
+        return ((nx * nx) + (ny * ny)) <= 1;
+      }
+    }
+
+    const bounds = prepared.rectBounds;
     if (!bounds) return false;
     const cx = (bounds.minX + bounds.maxX) * 0.5;
     const cy = (bounds.minY + bounds.maxY) * 0.5;
@@ -2168,6 +2262,9 @@ export class WaterRegionDetector {
       ? "hsl"
       : "rgb";
     const seedHsl = fillColorMode === "hsl" ? rgb255ToHsl(seedR, seedG, seedB) : null;
+    const hslBias = normalizeHslFillBias(opts.hslFillBias);
+    const hueWeight = Math.pow(2, hslBias);
+    const lightnessWeight = Math.pow(2, -hslBias);
     const tolSq = Math.max(0, Number(opts.tolerance) || 0) ** 2;
     const bridgeCells = Math.max(0, Math.round(toFiniteNumber(opts.fillBridgePx, DEFAULT_WATER_OPTIONS.fillBridgePx) / gridStep));
     const offsetX = maskOffsetX(maskData);
@@ -2178,28 +2275,48 @@ export class WaterRegionDetector {
 
     const fullCols = maskFullCols(maskData);
     const fullRows = maskFullRows(maskData);
+    const cellCount = cols * rows;
+    let matchCache = null;
+    let matchMap = null;
+    try {
+      matchCache = new Uint8Array(cellCount);
+    } catch (_err) {
+      matchMap = new Map();
+    }
+
     const colorMatches = (gx, gy) => {
       const fullX = gx + offsetX;
       const fullY = gy + offsetY;
       if (fullX < 0 || fullX >= fullCols || fullY < 0 || fullY >= fullRows) return false;
+      const localIndex = gy * cols + gx;
+      if (matchCache) {
+        const cached = matchCache[localIndex];
+        if (cached) return cached === 2;
+      } else if (matchMap) {
+        const cached = matchMap.get(localIndex);
+        if (cached !== undefined) return cached === true;
+      }
       const px = Math.min(fullX * gridStep, imgW - 1);
       const py = Math.min(fullY * gridStep, imgH - 1);
       const idx = (py * imgW + px) * 4;
+      let matches = true;
       if (fillColorMode === "hsl") {
         const hsl = rgb255ToHsl(pixels[idx], pixels[idx + 1], pixels[idx + 2]);
         const dhRaw = Math.abs(hsl.h - seedHsl.h);
         const dh = Math.min(dhRaw, 1 - dhRaw) * 255;
         const ds = (hsl.s - seedHsl.s) * 255;
         const dl = (hsl.l - seedHsl.l) * 255;
-        if (((dh * dh) + (ds * ds) + (dl * dl)) > tolSq) return false;
+        matches = ((dh * dh * hueWeight) + (ds * ds) + (dl * dl * lightnessWeight)) <= tolSq;
       } else {
         const dr = pixels[idx] - seedR;
         const dg = pixels[idx + 1] - seedG;
         const db = pixels[idx + 2] - seedB;
-        if (((dr * dr) + (dg * dg) + (db * db)) > tolSq) return false;
+        matches = ((dr * dr) + (dg * dg) + (db * db)) <= tolSq;
       }
-      if (opts.requireWaterLikeFill === false) return true;
-      return isWaterLikeRgb(pixels[idx], pixels[idx + 1], pixels[idx + 2]);
+      if (matches && opts.requireWaterLikeFill !== false) matches = isWaterLikeRgb(pixels[idx], pixels[idx + 1], pixels[idx + 2]);
+      if (matchCache) matchCache[localIndex] = matches ? 2 : 1;
+      else matchMap?.set(localIndex, matches);
+      return matches;
     };
 
     const op = String(mode ?? "add").trim().toLowerCase();
@@ -2233,12 +2350,18 @@ export class WaterRegionDetector {
     const stackX = [seedGX];
     const stackY = [seedGY];
     const stackGap = bridgeCells > 0 ? [0] : null;
-    const cellCount = cols * rows;
     let visitedBits = null;
     let visitedSet = null;
     let bestGap = null;
+    let bestGapBytes = null;
     if (bridgeCells > 0) {
-      bestGap = new Map([[seedGY * cols + seedGX, 0]]);
+      try {
+        bestGapBytes = new Uint8Array(cellCount);
+        bestGapBytes.fill(255);
+        bestGapBytes[seedGY * cols + seedGX] = 0;
+      } catch (_err) {
+        bestGap = new Map([[seedGY * cols + seedGX, 0]]);
+      }
     } else {
       try {
         visitedBits = new Uint8Array(Math.ceil(cellCount / 8));
@@ -2253,9 +2376,15 @@ export class WaterRegionDetector {
       if (gx < 0 || gx >= cols || gy < 0 || gy >= rows) return;
       const idx = gy * cols + gx;
       if (bridgeCells > 0) {
-        const currentBest = bestGap.get(idx);
-        if (currentBest !== undefined && gap >= currentBest) return;
-        bestGap.set(idx, gap);
+        if (bestGapBytes) {
+          const currentBest = bestGapBytes[idx];
+          if (currentBest !== 255 && gap >= currentBest) return;
+          bestGapBytes[idx] = gap;
+        } else {
+          const currentBest = bestGap.get(idx);
+          if (currentBest !== undefined && gap >= currentBest) return;
+          bestGap.set(idx, gap);
+        }
         stackGap.push(gap);
       } else if (visitedBits) {
         const byte = idx >> 3;
@@ -2604,27 +2733,16 @@ export class WaterRegionDetector {
     const scaleY = map.sceneHeight / imgH;
 
     const usableShapes = shapes
-      .map((shape) => regionShapeToObject(shape))
+      .map((shape) => prepareRegionShape(shape))
       .filter((shape) => shape && typeof shape === "object");
     if (!usableShapes.length) return null;
-    const solidShapes = usableShapes.filter((shape) => !isRegionShapeHole(shape));
-    const holeShapes = usableShapes.filter((shape) => isRegionShapeHole(shape));
-    if (!solidShapes.length) return null;
+    if (!usableShapes.some((shape) => !shape.isHole)) return null;
 
-    for (let y = 0; y < rows; y += 1) {
-      for (let x = 0; x < cols; x += 1) {
-        const scenePoint = {
-          x: map.sceneX + ((x + 0.5) * gridStep * scaleX),
-          y: map.sceneY + ((y + 0.5) * gridStep * scaleY),
-        };
-        const insideSolid = solidShapes.some((shape) => pointInRegionShape(scenePoint, shape));
-        if (!insideSolid) continue;
-        const insideHole = holeShapes.some((shape) => pointInRegionShape(scenePoint, shape));
-        if (!insideHole) {
-          mask[y * cols + x] = 1;
-          maskData.bounds = expandMaskBounds(maskData.bounds, x, y, cols, rows);
-        }
-      }
+    for (const shape of usableShapes.filter((entry) => !entry.isHole)) {
+      WaterRegionDetector.#applyRegionShapeToMask(maskData, shape, "add");
+    }
+    for (const shape of usableShapes.filter((entry) => entry.isHole)) {
+      WaterRegionDetector.#applyRegionShapeToMask(maskData, shape, "subtract");
     }
 
     return WaterRegionDetector.#fillMaskAlpha(maskData, 255);
@@ -2675,8 +2793,8 @@ export class WaterRegionDetector {
         ? region.shapes
         : (Array.isArray(region?.document?.shapes) ? region.document.shapes : []);
       for (let i = shapes.length - 1; i >= 0; i -= 1) {
-        const shape = regionShapeToObject(shapes[i]);
-        if (shape && pointInRegionShape(point, shape)) return shape;
+        const shape = prepareRegionShape(shapes[i]);
+        if (shape && pointInPreparedRegionShape(point, shape)) return shape;
       }
     }
     return null;
@@ -2691,7 +2809,9 @@ export class WaterRegionDetector {
     const map = getSceneImageMapping(imgW, imgH);
     const scaleX = map.sceneWidth / imgW;
     const scaleY = map.sceneHeight / imgH;
-    const bounds = regionShapeBounds(shape);
+    const prepared = (shape?.polygon || shape?.rectBounds) ? shape : prepareRegionShape(shape);
+    if (!prepared) return 0;
+    const bounds = prepared.bounds;
     const imageMinX = bounds ? (bounds.minX - map.sceneX) / scaleX : 0;
     const imageMinY = bounds ? (bounds.minY - map.sceneY) / scaleY : 0;
     const imageMaxX = bounds ? (bounds.maxX - map.sceneX) / scaleX : imgW;
@@ -2712,7 +2832,7 @@ export class WaterRegionDetector {
           x: map.sceneX + ((x + 0.5) * gridStep * scaleX),
           y: map.sceneY + ((y + 0.5) * gridStep * scaleY),
         };
-        if (!pointInRegionShape(scenePoint, shape)) continue;
+        if (!pointInPreparedRegionShape(scenePoint, prepared)) continue;
         const idx = rowOffset + x;
         if (op === "subtract" || op === "remove") {
           if (!mask[idx]) continue;
@@ -2765,6 +2885,7 @@ export class WaterRegionDetector {
       opts.tolerance = Math.max(0, readNumber("tolerance", opts.tolerance));
       opts.gridStep = Math.max(1, Math.round(readNumber("gridStep", opts.gridStep)));
       opts.fillBridgePx = normalizeFillBridgePx(readNumber("fillBridgePx", opts.fillBridgePx), opts.fillBridgePx);
+      opts.hslFillBias = normalizeHslFillBias(readNumber("hslFillBias", opts.hslFillBias), opts.hslFillBias);
       const fillColorModeInput = root.querySelector('[name="fillColorMode"]');
       const fillColorMode = String(fillColorModeInput?.value ?? opts.fillColorMode ?? DEFAULT_WATER_OPTIONS.fillColorMode).trim().toLowerCase();
       opts.fillColorMode = fillColorMode === "hsl" ? "hsl" : "rgb";
@@ -2811,6 +2932,7 @@ export class WaterRegionDetector {
       tolerance: opts.tolerance,
       gridStep: opts.gridStep,
       fillBridgePx: opts.fillBridgePx,
+      hslFillBias: opts.hslFillBias,
       smoothing: opts.smoothing,
       paintOpacity: opts.paintOpacity,
       paintBorderThickness: opts.paintBorderThickness,
@@ -3072,6 +3194,7 @@ export class WaterRegionDetector {
       changedCells: result.changed,
       visitedCells: result.visited ?? 0,
       tolerance: opts.tolerance,
+      hslFillBias: opts.hslFillBias,
       gridStep: session.maskData?.gridStep ?? 0,
       bounds: WaterRegionDetector.#getMaskBounds(session.maskData),
     });
@@ -3519,9 +3642,47 @@ export class WaterRegionDetector {
     const helpStyle = paintHelpDisplayStyle(WaterRegionDetector.#moduleId);
     const helpOpenAttr = getStoredPaintHelpOpen(WaterRegionDetector.#moduleId) ? " open" : "";
     const t = (key, fallback) => localizeText(WaterRegionDetector.#moduleId, key, fallback);
+    const title = (key, fallback) => escapeAttribute(t(key, fallback));
     const content = `
+      <style>
+        .indy-regions-water-region-tool {
+          display: grid;
+          grid-template-columns: max-content minmax(16rem, 1fr);
+          gap: 0.25rem 0.6rem;
+          align-items: center;
+        }
+        .indy-regions-water-region-tool .form-group {
+          display: contents;
+        }
+        .indy-regions-water-region-tool label {
+          margin: 0;
+          white-space: nowrap;
+          align-self: center;
+        }
+        .indy-regions-water-region-tool .form-fields {
+          align-items: center;
+          display: grid;
+          gap: 0.35rem;
+          grid-template-columns: minmax(8rem, 1fr) 4.75rem;
+          margin: 0;
+        }
+        .indy-regions-water-region-tool input[type="number"] {
+          min-width: 0;
+          width: 4.75rem;
+        }
+        .indy-regions-water-region-tool input[type="color"] {
+          width: 4.75rem;
+        }
+        .indy-regions-water-region-tool .indy-full-row {
+          grid-column: 1 / -1;
+        }
+        .indy-regions-water-region-tool .indy-button-row {
+          display: flex;
+          gap: 0.35rem;
+        }
+      </style>
       <form class="indy-regions-water-region-tool">
-        <details class="notes" data-paint-help${helpOpenAttr}${helpStyle}>
+        <details class="notes indy-full-row" data-paint-help${helpOpenAttr}${helpStyle}>
           <summary>${t("Dialog.Help.Title", "Help")}</summary>
           <div style="line-height: 1.35; margin-top: 0.35rem;">
             <div>${t("Dialog.Help.ShiftDrag", "Shift-drag erases painted cells.")}</div>
@@ -3532,7 +3693,7 @@ export class WaterRegionDetector {
             <div>${t("Dialog.Help.CtrlWheel", "Ctrl-wheel changes brush size.")}</div>
           </div>
         </details>
-        <div class="form-group"${debugStyle}>
+        <div class="form-group indy-full-row"${debugStyle}>
           <label>${t("Dialog.Label.Status", "Status")}</label>
           <div class="form-fields">
             <span data-water-status>${t("Dialog.Status.Paint", "Paint on the canvas to add to the region. Shift-left mouse subtracts.")}</span>
@@ -3540,7 +3701,7 @@ export class WaterRegionDetector {
         </div>
         <div class="form-group">
           <label>${t("Dialog.Label.History", "History")}</label>
-          <div class="form-fields">
+          <div class="form-fields indy-button-row">
             <button type="button" data-paint-action="undo" disabled><i class="fas fa-undo"></i> ${t("Dialog.Button.Undo", "Undo")}</button>
             <button type="button" data-paint-action="redo" disabled><i class="fas fa-redo"></i> ${t("Dialog.Button.Redo", "Redo")}</button>
           </div>
@@ -3552,60 +3713,67 @@ export class WaterRegionDetector {
           </div>
         </div>
         <div class="form-group">
-          <label>${t("Dialog.Label.PaintOpacity", "Paint Opacity")}</label>
+          <label title="${title("Dialog.Hint.PaintOpacity", "0 transparent, 1 opaque.")}">${t("Dialog.Label.PaintOpacity", "Paint Opacity")}</label>
           <div class="form-fields">
-            <input type="range" name="paintOpacity" min="0" max="1" step="0.05" value="${normalizePaintOpacity(opts.paintOpacity)}">
-            <input type="number" name="paintOpacity" min="0" max="1" step="0.05" value="${normalizePaintOpacity(opts.paintOpacity)}">
+            <input type="range" name="paintOpacity" min="0" max="1" step="0.05" value="${normalizePaintOpacity(opts.paintOpacity)}" title="${title("Dialog.Hint.PaintOpacity", "0 transparent, 1 opaque.")}">
+            <input type="number" name="paintOpacity" min="0" max="1" step="0.05" value="${normalizePaintOpacity(opts.paintOpacity)}" title="${title("Dialog.Hint.PaintOpacity", "0 transparent, 1 opaque.")}">
           </div>
         </div>
         <div class="form-group">
-          <label>${t("Dialog.Label.BrushSize", "Brush Size")}</label>
+          <label title="${title("Dialog.Hint.BrushSize", "Brush diameter in pixels. Ctrl-wheel also changes this.")}">${t("Dialog.Label.BrushSize", "Brush Size")}</label>
           <div class="form-fields">
-            <input type="range" name="brushSizePx" min="1" max="512" step="1" value="${opts.brushSizePx}">
-            <input type="number" name="brushSizePx" min="1" max="512" step="1" value="${opts.brushSizePx}">
+            <input type="range" name="brushSizePx" min="1" max="512" step="1" value="${opts.brushSizePx}" title="${title("Dialog.Hint.BrushSize", "Brush diameter in pixels. Ctrl-wheel also changes this.")}">
+            <input type="number" name="brushSizePx" min="1" max="512" step="1" value="${opts.brushSizePx}" title="${title("Dialog.Hint.BrushSize", "Brush diameter in pixels. Ctrl-wheel also changes this.")}">
           </div>
         </div>
         <div class="form-group">
-          <label>${t("Dialog.Label.FillTolerance", "Fill Tolerance")}</label>
+          <label title="${title("Dialog.Hint.FillTolerance", "Lower is stricter, higher fills more similar colours.")}">${t("Dialog.Label.FillTolerance", "Fill Tolerance")}</label>
           <div class="form-fields">
-            <input type="range" name="tolerance" min="1" max="160" step="1" value="${opts.tolerance}">
-            <input type="number" name="tolerance" min="1" max="160" step="1" value="${opts.tolerance}">
+            <input type="range" name="tolerance" min="1" max="160" step="1" value="${opts.tolerance}" title="${title("Dialog.Hint.FillTolerance", "Lower is stricter, higher fills more similar colours.")}">
+            <input type="number" name="tolerance" min="1" max="160" step="1" value="${opts.tolerance}" title="${title("Dialog.Hint.FillTolerance", "Lower is stricter, higher fills more similar colours.")}">
           </div>
         </div>
         <div class="form-group">
-          <label>${t("Dialog.Label.FillBridge", "Fill Bridge")}</label>
+          <label title="${title("Dialog.Hint.HslFillBias", "-1 favors lightness, 0 balanced, 1 favors hue.")}">${t("Dialog.Label.HslFillBias", "HSL Fill Bias")}</label>
           <div class="form-fields">
-            <input type="range" name="fillBridgePx" min="0" max="${MAX_FILL_BRIDGE_PX}" step="1" value="${opts.fillBridgePx}">
-            <input type="number" name="fillBridgePx" min="0" max="${MAX_FILL_BRIDGE_PX}" step="1" value="${opts.fillBridgePx}">
+            <input type="range" name="hslFillBias" min="-1" max="1" step="0.05" value="${normalizeHslFillBias(opts.hslFillBias)}" title="${title("Dialog.Hint.HslFillBias", "-1 favors lightness, 0 balanced, 1 favors hue.")}">
+            <input type="number" name="hslFillBias" min="-1" max="1" step="0.05" value="${normalizeHslFillBias(opts.hslFillBias)}" title="${title("Dialog.Hint.HslFillBias", "-1 favors lightness, 0 balanced, 1 favors hue.")}">
+          </div>
+        </div>
+        <div class="form-group">
+          <label title="${title("Dialog.Hint.FillBridge", "0 is strict; higher values cross small gaps.")}">${t("Dialog.Label.FillBridge", "Fill Bridge")}</label>
+          <div class="form-fields">
+            <input type="range" name="fillBridgePx" min="0" max="${MAX_FILL_BRIDGE_PX}" step="1" value="${opts.fillBridgePx}" title="${title("Dialog.Hint.FillBridge", "0 is strict; higher values cross small gaps.")}">
+            <input type="number" name="fillBridgePx" min="0" max="${MAX_FILL_BRIDGE_PX}" step="1" value="${opts.fillBridgePx}" title="${title("Dialog.Hint.FillBridge", "0 is strict; higher values cross small gaps.")}">
           </div>
         </div>
         <input type="hidden" name="fillColorMode" value="hsl">
         <div class="form-group">
-          <label>${t("Dialog.Label.GridStep", "Grid Step")}</label>
+          <label title="${title("Dialog.Hint.GridStep", "1 is most precise; higher values are faster but coarser.")}">${t("Dialog.Label.GridStep", "Grid Step")}</label>
           <div class="form-fields">
-            <input type="range" name="gridStep" min="1" max="16" step="1" value="${opts.gridStep}">
-            <input type="number" name="gridStep" min="1" max="16" step="1" value="${opts.gridStep}">
+            <input type="range" name="gridStep" min="1" max="16" step="1" value="${opts.gridStep}" title="${title("Dialog.Hint.GridStep", "1 is most precise; higher values are faster but coarser.")}">
+            <input type="number" name="gridStep" min="1" max="16" step="1" value="${opts.gridStep}" title="${title("Dialog.Hint.GridStep", "1 is most precise; higher values are faster but coarser.")}">
           </div>
         </div>
         <div class="form-group">
-          <label>${t("Dialog.Label.ShrinkGrow", "Shrink / Grow")}</label>
+          <label title="${title("Dialog.Hint.ShrinkGrow", "Negative shrinks, positive grows the final boundary.")}">${t("Dialog.Label.ShrinkGrow", "Shrink / Grow")}</label>
           <div class="form-fields">
-            <input type="range" name="featherShrinkPx" min="-64" max="64" step="1" value="${opts.featherShrinkPx}">
-            <input type="number" name="featherShrinkPx" min="-64" max="64" step="1" value="${opts.featherShrinkPx}">
+            <input type="range" name="featherShrinkPx" min="-64" max="64" step="1" value="${opts.featherShrinkPx}" title="${title("Dialog.Hint.ShrinkGrow", "Negative shrinks, positive grows the final boundary.")}">
+            <input type="number" name="featherShrinkPx" min="-64" max="64" step="1" value="${opts.featherShrinkPx}" title="${title("Dialog.Hint.ShrinkGrow", "Negative shrinks, positive grows the final boundary.")}">
           </div>
         </div>
         <div class="form-group">
-          <label>${t("Dialog.Label.BorderSmooth", "Border Smooth")}</label>
+          <label title="${title("Dialog.Hint.BorderSmooth", "0 keeps detail; higher values simplify jagged edges.")}">${t("Dialog.Label.BorderSmooth", "Border Smooth")}</label>
           <div class="form-fields">
-            <input type="range" name="smoothing" min="0" max="16" step="0.25" value="${opts.smoothing}">
-            <input type="number" name="smoothing" min="0" max="16" step="0.25" value="${opts.smoothing}">
+            <input type="range" name="smoothing" min="0" max="16" step="0.25" value="${opts.smoothing}" title="${title("Dialog.Hint.BorderSmooth", "0 keeps detail; higher values simplify jagged edges.")}">
+            <input type="number" name="smoothing" min="0" max="16" step="0.25" value="${opts.smoothing}" title="${title("Dialog.Hint.BorderSmooth", "0 keeps detail; higher values simplify jagged edges.")}">
           </div>
         </div>
         <div class="form-group">
-          <label>${t("Dialog.Label.BorderThickness", "Border Thickness")}</label>
+          <label title="${title("Dialog.Hint.BorderThickness", "0 hides live borders; thicker values make them easier to see.")}">${t("Dialog.Label.BorderThickness", "Border Thickness")}</label>
           <div class="form-fields">
-            <input type="range" name="paintBorderThickness" min="0" max="4" step="0.25" value="${opts.paintBorderThickness}">
-            <input type="number" name="paintBorderThickness" min="0" max="4" step="0.25" value="${opts.paintBorderThickness}">
+            <input type="range" name="paintBorderThickness" min="0" max="4" step="0.25" value="${opts.paintBorderThickness}" title="${title("Dialog.Hint.BorderThickness", "0 hides live borders; thicker values make them easier to see.")}">
+            <input type="number" name="paintBorderThickness" min="0" max="4" step="0.25" value="${opts.paintBorderThickness}" title="${title("Dialog.Hint.BorderThickness", "0 hides live borders; thicker values make them easier to see.")}">
           </div>
         </div>
       </form>

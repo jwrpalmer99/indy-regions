@@ -33,11 +33,23 @@
         "PaintOpacity": "Opacidade da pintura",
         "BrushSize": "Tamanho do pincel",
         "FillTolerance": "Tolerância de preenchimento",
+        "HslFillBias": "Viés de preenchimento HSL",
         "FillBridge": "Ponte de preenchimento",
         "GridStep": "Passo da grade",
         "ShrinkGrow": "Reduzir / ampliar",
         "BorderSmooth": "Suavização da borda",
         "BorderThickness": "Espessura da borda"
+      },
+      "Hint": {
+        "PaintOpacity": "0 transparente, 1 opaco.",
+        "BrushSize": "Diâmetro do pincel em pixels. Ctrl-roda também altera isso.",
+        "FillTolerance": "Menor é mais restrito; maior preenche mais cores semelhantes.",
+        "HslFillBias": "-1 favorece luminosidade, 0 equilibrado, 1 favorece matiz.",
+        "FillBridge": "0 é restrito; valores maiores cruzam pequenas lacunas.",
+        "GridStep": "1 é mais preciso; valores maiores são mais rápidos, mas mais grosseiros.",
+        "ShrinkGrow": "Negativo reduz, positivo amplia o contorno final.",
+        "BorderSmooth": "0 mantém detalhes; valores maiores simplificam bordas irregulares.",
+        "BorderThickness": "0 oculta bordas ao vivo; valores maiores as tornam mais visíveis."
       },
       "Status": {
         "Paint": "Pinte no canvas para adicionar à região. Shift-botão esquerdo subtrai."

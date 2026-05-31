@@ -33,11 +33,23 @@
         "PaintOpacity": "ペイント不透明度",
         "BrushSize": "ブラシサイズ",
         "FillTolerance": "塗りつぶし許容値",
+        "HslFillBias": "HSL塗りつぶしバイアス",
         "FillBridge": "塗りつぶしブリッジ",
         "GridStep": "グリッド間隔",
         "ShrinkGrow": "縮小 / 拡張",
         "BorderSmooth": "境界の滑らかさ",
         "BorderThickness": "境界の太さ"
+      },
+      "Hint": {
+        "PaintOpacity": "0 は透明、1 は不透明です。",
+        "BrushSize": "ブラシ直径をピクセルで指定します。Ctrl+ホイールでも変更できます。",
+        "FillTolerance": "低いほど厳密、高いほど近い色を広く塗りつぶします。",
+        "HslFillBias": "-1 は明度重視、0 は均等、1 は色相重視です。",
+        "FillBridge": "0 は厳密です。高い値ほど小さな隙間を越えます。",
+        "GridStep": "1 が最も精密です。高い値ほど速くなりますが粗くなります。",
+        "ShrinkGrow": "負の値で縮小、正の値で最終境界を拡張します。",
+        "BorderSmooth": "0 は詳細を保持します。高い値ほどギザギザの縁を単純化します。",
+        "BorderThickness": "0 はライブ境界を隠します。高い値ほど見やすくなります。"
       },
       "Status": {
         "Paint": "キャンバス上でペイントしてリージョンに追加します。Shift+左クリックで減算します。"
