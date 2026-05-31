@@ -14,6 +14,8 @@ export class PaintSession {
     this.dialog ??= null;
     this.root ??= null;
     this.paintRefreshTimer ??= null;
+    this.paintPreviewFrame ??= null;
+    this.paintPreviewFrameType ??= null;
     this.paintDirty ??= false;
     this.painting ??= false;
     this.paintMode ??= null;
@@ -48,10 +50,48 @@ export class PaintSession {
       clearTimeout(this.paintRefreshTimer);
       this.paintRefreshTimer = null;
     }
+    this.cancelPaintPreviewFrame();
     if (this.gridStepUpdateTimer) {
       clearTimeout(this.gridStepUpdateTimer);
       this.gridStepUpdateTimer = null;
     }
+  }
+
+  requestPaintPreviewFrame(callback) {
+    if (typeof callback !== "function" || this.paintPreviewFrame) return false;
+    const raf = globalThis.requestAnimationFrame;
+    if (typeof raf === "function") {
+      this.paintPreviewFrameType = "raf";
+      this.paintPreviewFrame = raf(() => {
+        this.paintPreviewFrame = null;
+        this.paintPreviewFrameType = null;
+        if (this.closed !== true) callback();
+      });
+      return true;
+    }
+    this.paintPreviewFrameType = "timeout";
+    this.paintPreviewFrame = setTimeout(() => {
+      this.paintPreviewFrame = null;
+      this.paintPreviewFrameType = null;
+      if (this.closed !== true) callback();
+    }, 16);
+    return true;
+  }
+
+  cancelPaintPreviewFrame() {
+    if (!this.paintPreviewFrame) return;
+    if (this.paintPreviewFrameType === "raf" && typeof globalThis.cancelAnimationFrame === "function") {
+      globalThis.cancelAnimationFrame(this.paintPreviewFrame);
+    } else {
+      clearTimeout(this.paintPreviewFrame);
+    }
+    this.paintPreviewFrame = null;
+    this.paintPreviewFrameType = null;
+  }
+
+  flushPaintPreviewFrame(callback) {
+    this.cancelPaintPreviewFrame();
+    if (typeof callback === "function" && this.closed !== true) callback();
   }
 
   setMaskData(maskData, sourceMaskData = this.sourceMaskData) {

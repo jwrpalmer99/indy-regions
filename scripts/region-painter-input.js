@@ -167,6 +167,7 @@ export function finishPaintStroke(session, {
   moduleId = "indy-regions",
   finalizeDelta = null,
   pushUndo = null,
+  cancelPreviewUpdate = null,
   refreshCandidate = null,
 } = {}) {
   const strokeStart = nowMs();
@@ -177,6 +178,7 @@ export function finishPaintStroke(session, {
     session.clearRedo();
   }
   if (strokeState.dirty) {
+    cancelPreviewUpdate?.(session);
     if (session.paintRefreshTimer) {
       clearTimeout(session.paintRefreshTimer);
       session.paintRefreshTimer = null;

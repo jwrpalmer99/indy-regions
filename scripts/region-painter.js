@@ -1112,6 +1112,18 @@ function setPaintMaskPreview(session) {
     });
   }
 
+function schedulePaintPreviewUpdate(session) {
+    if (!session?.isPaintSession) return;
+    session.requestPaintPreviewFrame?.(() => {
+      setPaintMaskPreview(session);
+      updatePaintSessionStatus(session);
+    });
+  }
+
+function cancelPaintPreviewUpdate(session) {
+    session?.cancelPaintPreviewFrame?.();
+  }
+
 function maskFromRegionShapes(region, options = {}) {
     return rasterMaskFromRegionShapes(region, {
       options,
@@ -1322,8 +1334,7 @@ function paintOperationCallbacks() {
       moduleId: painterState.moduleId,
       readOptions: (paintSession) => readPaintSessionOptions(paintSession),
       stampBrushOnMask: (maskData, x, y, mode, options, recorder) => stampBrushOnMask(maskData, x, y, mode, options, recorder),
-      setPaintMaskPreview: (paintSession) => setPaintMaskPreview(paintSession),
-      updateStatus: (paintSession) => updatePaintSessionStatus(paintSession),
+      schedulePreviewUpdate: (paintSession) => schedulePaintPreviewUpdate(paintSession),
       refreshCandidate: (paintSession) => refreshPaintCandidate(paintSession),
       createDeltaRecorder: (paintSession) => createPaintDeltaRecorder(paintSession),
       finalizeDelta: (recorder) => finalizePaintDelta(recorder),
@@ -1342,6 +1353,7 @@ function finishPaintStroke(session) {
       moduleId: painterState.moduleId,
       finalizeDelta: (recorder) => finalizePaintDelta(recorder),
       pushUndo: (paintSession, snapshot) => pushPaintUndoSnapshot(paintSession, snapshot),
+      cancelPreviewUpdate: (paintSession) => cancelPaintPreviewUpdate(paintSession),
       refreshCandidate: (paintSession) => refreshPaintCandidate(paintSession),
     });
   }

@@ -10,8 +10,7 @@ import {
 export function stampPaintSession(session, point, mode, options = null, {
   readOptions = null,
   stampBrushOnMask = null,
-  setPaintMaskPreview = null,
-  updateStatus = null,
+  schedulePreviewUpdate = null,
   refreshCandidate = null,
 } = {}) {
   if (!session?.maskData || !point) return 0;
@@ -29,15 +28,14 @@ export function stampPaintSession(session, point, mode, options = null, {
   session.paintPreviewDirtyBounds = mergeMaskBounds(session.paintPreviewDirtyBounds, changedBounds, session.maskData.cols, session.maskData.rows);
   session.markStrokeChanged(changed);
   if (session.paintRefreshTimer) return changed;
+  if (session.isPaintSession === true) {
+    schedulePreviewUpdate?.(session);
+    return changed;
+  }
   session.paintRefreshTimer = setTimeout(() => {
     session.paintRefreshTimer = null;
-    if (session.isPaintSession === true) {
-      setPaintMaskPreview?.(session);
-      updateStatus?.(session);
-      return;
-    }
     void refreshCandidate?.(session);
-  }, session.isPaintSession === true ? 140 : 80);
+  }, 80);
   return changed;
 }
 
