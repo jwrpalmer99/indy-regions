@@ -1,975 +1,101 @@
 import {
   CARDINAL_DIRECTIONS,
-  DEBUG_TIMINGS_SETTING,
   DEFAULT_WATER_OPTIONS,
-  LEGACY_REGION_SHADER_BEHAVIOR_TYPE,
   MAX_FILL_BRIDGE_PX,
   MIN_HOLE_LOOP_AREA_CELLS,
   PAINT_HISTORY_LIMIT,
   PAINT_MASK_FLAG,
   PAINT_REGION_DEFAULT_NAME,
-  REGION_SHADER_BEHAVIOR_TYPE,
-  SHOW_PAINT_HELP_SETTING,
   SMALL_MORPH_RADIUS_CELLS,
 } from "./region-painter-constants.js";
 import { renderPaintDialogContent } from "./region-painter-dialog.js";
-
-function toFiniteNumber(value, fallback) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function nowMs() {
-  try {
-    if (typeof globalThis.performance?.now === "function") return globalThis.performance.now();
-  } catch (_err) {
-    // Fall through.
-  }
-  return Date.now();
-}
-
-function roundTimingMs(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
-}
-
-function isDebugTimingEnabled(moduleId = "indy-regions") {
-  try {
-    return game?.settings?.get?.(moduleId, DEBUG_TIMINGS_SETTING) === true
-      || globalThis.INDY_REGIONS_DEBUG_TIMINGS === true;
-  } catch (_err) {
-    return globalThis.INDY_REGIONS_DEBUG_TIMINGS === true;
-  }
-}
-
-function debugUiDisplayStyle(moduleId = "indy-regions") {
-  return isDebugTimingEnabled(moduleId) ? "" : ' style="display:none;"';
-}
-
-function paintHelpDisplayStyle(moduleId = "indy-regions") {
-  try {
-    return game?.settings?.get?.(moduleId, SHOW_PAINT_HELP_SETTING) !== false
-      ? ' style="grid-column: 1 / -1; margin-top: 0;"'
-      : ' style="display:none;"';
-  } catch (_err) {
-    return ' style="grid-column: 1 / -1; margin-top: 0;"';
-  }
-}
-
-function getStoredPaintHelpOpen(moduleId = "indy-regions") {
-  try {
-    return globalThis.localStorage?.getItem?.(`${moduleId}.paintHelpOpen`) === "true";
-  } catch (_err) {
-    return false;
-  }
-}
-
-function setStoredPaintHelpOpen(moduleId = "indy-regions", open = false) {
-  try {
-    globalThis.localStorage?.setItem?.(`${moduleId}.paintHelpOpen`, open === true ? "true" : "false");
-  } catch (_err) {
-    // Non-fatal.
-  }
-}
-
-function localizeText(moduleId, key, fallback = key) {
-  const fullKey = `${moduleId}.${key}`;
-  const value = game?.i18n?.localize?.(fullKey);
-  return value && value !== fullKey ? value : fallback;
-}
-
-function formatText(moduleId, key, data = {}, fallback = key) {
-  const fullKey = `${moduleId}.${key}`;
-  const value = game?.i18n?.format?.(fullKey, data);
-  if (value && value !== fullKey) return value;
-  return String(fallback).replace(/\{([^}]+)\}/g, (_match, name) => data?.[name] ?? "");
-}
-
-function debugTiming(moduleId, label, payload = {}) {
-  if (!isDebugTimingEnabled(moduleId)) return;
-  try {
-    console.debug(`${moduleId} | timing | ${label}`, payload);
-  } catch (_err) {
-    // Non-fatal.
-  }
-}
-
-function rgb255ToHsl(r, g, b) {
-  const rn = clamp(Number(r) / 255, 0, 1);
-  const gn = clamp(Number(g) / 255, 0, 1);
-  const bn = clamp(Number(b) / 255, 0, 1);
-  const max = Math.max(rn, gn, bn);
-  const min = Math.min(rn, gn, bn);
-  const l = (max + min) * 0.5;
-  if (max === min) return { h: 0, s: 0, l };
-  const d = max - min;
-  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-  let h = 0;
-  if (max === rn) h = ((gn - bn) / d + (gn < bn ? 6 : 0)) / 6;
-  else if (max === gn) h = ((bn - rn) / d + 2) / 6;
-  else h = ((rn - gn) / d + 4) / 6;
-  return { h, s, l };
-}
-
-function getSceneBackgroundPath(scene) {
-  return String(
-    scene?.background?.src ??
-      scene?.background?.source ??
-      scene?.img ??
-      "",
-  ).trim();
-}
-
-function getSceneImageMapping(imgW, imgH) {
-  const dims = canvas?.dimensions ?? {};
-  return {
-    sceneX: toFiniteNumber(dims.sceneX, 0),
-    sceneY: toFiniteNumber(dims.sceneY, 0),
-    sceneWidth: Math.max(1, toFiniteNumber(dims.sceneWidth, imgW)),
-    sceneHeight: Math.max(1, toFiniteNumber(dims.sceneHeight, imgH)),
-  };
-}
-
-function sceneToImagePoint(sceneX, sceneY, imgW, imgH) {
-  const map = getSceneImageMapping(imgW, imgH);
-  return {
-    x: Math.round(((sceneX - map.sceneX) / map.sceneWidth) * imgW),
-    y: Math.round(((sceneY - map.sceneY) / map.sceneHeight) * imgH),
-  };
-}
-
-function imageGridPointToScene(x, y, gridStep, imgW, imgH) {
-  const map = getSceneImageMapping(imgW, imgH);
-  const scaleX = map.sceneWidth / imgW;
-  const scaleY = map.sceneHeight / imgH;
-  return {
-    x: Math.round(map.sceneX + x * gridStep * scaleX),
-    y: Math.round(map.sceneY + y * gridStep * scaleY),
-  };
-}
-
-function polygonArea(points) {
-  let area = 0;
-  for (let i = 0; i < points.length; i += 1) {
-    const a = points[i];
-    const b = points[(i + 1) % points.length];
-    area += (a.x * b.y) - (b.x * a.y);
-  }
-  return area * 0.5;
-}
-
-function pointLineDistance(p, a, b) {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const lenSq = dx * dx + dy * dy;
-  if (lenSq <= 0) return Math.hypot(p.x - a.x, p.y - a.y);
-  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq));
-  const x = a.x + t * dx;
-  const y = a.y + t * dy;
-  return Math.hypot(p.x - x, p.y - y);
-}
-
-function simplifyRdpOpen(points, tolerance) {
-  if (!Array.isArray(points) || points.length <= 2) return points ?? [];
-  const tol = Math.max(0, Number(tolerance) || 0);
-  if (tol <= 0) return points.slice();
-
-  function simplify(start, end) {
-    let maxDist = 0;
-    let maxIndex = start;
-    const a = points[start];
-    const b = points[end];
-
-    for (let i = start + 1; i < end; i += 1) {
-      const dist = pointLineDistance(points[i], a, b);
-      if (dist > maxDist) {
-        maxDist = dist;
-        maxIndex = i;
-      }
-    }
-
-    if (maxDist > tol) {
-      const left = simplify(start, maxIndex);
-      const right = simplify(maxIndex, end);
-      return left.slice(0, -1).concat(right);
-    }
-
-    return [a, b];
-  }
-
-  return simplify(0, points.length - 1);
-}
-
-function simplifyClosedPolygon(points, tolerance) {
-  if (!Array.isArray(points) || points.length <= 3) return points ?? [];
-  const amount = Math.max(0, Number(tolerance) || 0);
-  let bestIndex = 0;
-  for (let i = 1; i < points.length; i += 1) {
-    const a = points[i];
-    const b = points[bestIndex];
-    if (a.x < b.x || (a.x === b.x && a.y < b.y)) bestIndex = i;
-  }
-  const rotated = points.slice(bestIndex).concat(points.slice(0, bestIndex));
-  rotated.push(rotated[0]);
-  const simplified = simplifyRdpOpen(rotated, amount).slice(0, -1);
-  const base = simplified.length >= 3 ? simplified : points.slice();
-  return smoothClosedPolygon(base, amount);
-}
-
-function limitClosedPolygonPoints(points, maxPoints = 512) {
-  if (!Array.isArray(points) || points.length <= maxPoints) return points ?? [];
-  const stride = Math.ceil(points.length / maxPoints);
-  const out = [];
-  for (let i = 0; i < points.length; i += stride) out.push(points[i]);
-  return out.length >= 3 ? out : points.slice(0, maxPoints);
-}
-
-function smoothClosedPolygon(points, amount) {
-  if (!Array.isArray(points) || points.length < 3) return points ?? [];
-  const smoothAmount = Math.max(0, Number(amount) || 0);
-  if (smoothAmount <= 0) return points.slice();
-
-  const maxPoints = 512;
-  const requestedSamples = Math.max(2, Math.min(10, Math.ceil(smoothAmount * 0.75)));
-  const samplesPerSegment = Math.max(1, Math.min(requestedSamples, Math.floor(maxPoints / points.length)));
-  if (samplesPerSegment <= 1) return points.slice();
-
-  const catmullRom = (p0, p1, p2, p3, t) => {
-    const t2 = t * t;
-    const t3 = t2 * t;
-    return {
-      x: 0.5 * (
-        (2 * p1.x) +
-        ((-p0.x + p2.x) * t) +
-        (((2 * p0.x) - (5 * p1.x) + (4 * p2.x) - p3.x) * t2) +
-        ((-p0.x + (3 * p1.x) - (3 * p2.x) + p3.x) * t3)
-      ),
-      y: 0.5 * (
-        (2 * p1.y) +
-        ((-p0.y + p2.y) * t) +
-        (((2 * p0.y) - (5 * p1.y) + (4 * p2.y) - p3.y) * t2) +
-        ((-p0.y + (3 * p1.y) - (3 * p2.y) + p3.y) * t3)
-      ),
-    };
-  };
-
-  const out = [];
-  for (let i = 0; i < points.length; i += 1) {
-    const p0 = points[(i - 1 + points.length) % points.length];
-    const p1 = points[i];
-    const p2 = points[(i + 1) % points.length];
-    const p3 = points[(i + 2) % points.length];
-    for (let sample = 0; sample < samplesPerSegment; sample += 1) {
-      out.push(catmullRom(p0, p1, p2, p3, sample / samplesPerSegment));
-    }
-  }
-  return limitClosedPolygonPoints(out, maxPoints);
-}
-
-function getPointerWorldPoint(event) {
-  const global = event?.data?.global ?? event?.global;
-  if (!global || !canvas?.stage?.toLocal) return null;
-  const p = canvas.stage.toLocal(global);
-  return { x: p.x, y: p.y };
-}
-
-function getDomPointerWorldPoint(event) {
-  if (!event || !canvas?.stage?.toLocal) return null;
-  const point = new PIXI.Point();
-  const renderer = canvas?.app?.renderer;
-  try {
-    if (typeof renderer?.events?.mapPositionToPoint === "function") {
-      renderer.events.mapPositionToPoint(point, event.clientX, event.clientY);
-    } else if (typeof renderer?.plugins?.interaction?.mapPositionToPoint === "function") {
-      renderer.plugins.interaction.mapPositionToPoint(point, event.clientX, event.clientY);
-    } else {
-      const view = canvas?.app?.view ?? renderer?.view;
-      const rect = view?.getBoundingClientRect?.();
-      if (!rect) return null;
-      const width = Number(view.width) || rect.width || 1;
-      const height = Number(view.height) || rect.height || 1;
-      point.x = (event.clientX - rect.left) * (width / Math.max(1, rect.width));
-      point.y = (event.clientY - rect.top) * (height / Math.max(1, rect.height));
-    }
-    const p = canvas.stage.toLocal(point);
-    return { x: p.x, y: p.y };
-  } catch (_err) {
-    return null;
-  }
-}
-
-function getWorldHitRadius(screenPx = 14) {
-  const scale = Math.max(
-    0.0001,
-    Math.abs(Number(canvas?.stage?.scale?.x) || Number(canvas?.app?.stage?.scale?.x) || 1),
-  );
-  return screenPx / scale;
-}
-
-function isPrimaryPointerEvent(event) {
-  const original = event?.data?.originalEvent ?? event?.nativeEvent ?? event;
-  const button = Number(original?.button ?? event?.button ?? 0);
-  if (Number.isFinite(button) && button !== 0) return false;
-  const buttons = Number(original?.buttons ?? event?.buttons ?? 1);
-  if (Number.isFinite(buttons) && buttons > 0 && (buttons & 1) !== 1) return false;
-  return true;
-}
-
-function isPrimaryDomPointerEvent(event) {
-  const button = Number(event?.button ?? 0);
-  if (Number.isFinite(button) && button !== 0) return false;
-  const buttons = Number(event?.buttons ?? 1);
-  if (Number.isFinite(buttons) && buttons > 0 && (buttons & 1) !== 1) return false;
-  return true;
-}
-
-function consumePaintPointerEvent(event) {
-  try {
-    event?.preventDefault?.();
-    event?.stopImmediatePropagation?.();
-    event?.stopPropagation?.();
-    const original = event?.data?.originalEvent ?? event?.nativeEvent ?? event;
-    original?.preventDefault?.();
-    original?.stopImmediatePropagation?.();
-    original?.stopPropagation?.();
-  } catch (_err) {
-    // Non-fatal.
-  }
-}
-
-function normalizeOptions(options = {}) {
-  const merged = {
-    ...DEFAULT_WATER_OPTIONS,
-    ...(options && typeof options === "object" ? options : {}),
-  };
-  merged.fillBridgePx = clamp(toFiniteNumber(merged.fillBridgePx, DEFAULT_WATER_OPTIONS.fillBridgePx), 0, MAX_FILL_BRIDGE_PX);
-  return merged;
-}
-
-function normalizeFillBridgePx(value, fallback = DEFAULT_WATER_OPTIONS.fillBridgePx) {
-  return clamp(toFiniteNumber(value, fallback), 0, MAX_FILL_BRIDGE_PX);
-}
-
-function normalizePaintOpacity(value, fallback = DEFAULT_WATER_OPTIONS.paintOpacity) {
-  return clamp(toFiniteNumber(value, fallback), 0, 1);
-}
-
-function normalizeHslFillBias(value, fallback = DEFAULT_WATER_OPTIONS.hslFillBias) {
-  return clamp(toFiniteNumber(value, fallback), -1, 1);
-}
-
-function rgbToWaterScore(r, g, b) {
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const chroma = max - min;
-  const luma = (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
-  if (chroma < 7) return 0;
-  if (luma < 8 || luma > 238) return 0;
-
-  // Reject foliage and warm earth/wood tones before accepting cool water.
-  if (g > b + 34 && g > r + 18) return 0;
-  if (r > b + 16 && r > g + 8) return 0;
-
-  const blueWater = b >= r + 8 && b >= g * 0.68;
-  const cyanWater = g >= r + 8 && b >= r + 6 && Math.abs(g - b) <= 86;
-  const darkWater = luma < 95 && b >= r + 4 && g >= r - 14 && chroma >= 9;
-  if (!blueWater && !cyanWater && !darkWater) return 0;
-
-  const coolStrength = Math.max(b - r, Math.min(g, b) - r, 0);
-  return Math.max(0, Math.min(1, (coolStrength + chroma * 0.25) / 90));
-}
-
-function isWaterLikeRgb(r, g, b) {
-  return rgbToWaterScore(r, g, b) >= 0.08;
-}
-
-function destroyPreviewSprite(sprite) {
-  if (!sprite) return;
-  try {
-    sprite.parent?.removeChild?.(sprite);
-    sprite.texture?.destroy?.(true);
-    sprite.destroy?.({ children: true });
-  } catch (_err) {
-    // Non-fatal.
-  }
-}
-
-function cloneMaskData(maskData) {
-  if (!maskData?.mask) return null;
-  return {
-    mask: new Uint8Array(maskData.mask),
-    alphaMask: maskData.alphaMask ? new Uint8Array(maskData.alphaMask) : null,
-    cols: maskData.cols,
-    rows: maskData.rows,
-    gridStep: maskData.gridStep,
-    offsetX: maskData.offsetX ?? 0,
-    offsetY: maskData.offsetY ?? 0,
-    fullCols: maskData.fullCols ?? maskData.cols,
-    fullRows: maskData.fullRows ?? maskData.rows,
-    bounds: maskData.bounds ? { ...maskData.bounds } : null,
-    boundsDirty: maskData.boundsDirty === true,
-  };
-}
-
-function clonePaintSnapshot(session, fallback = null) {
-  const maskData = cloneMaskData(fallback ?? session?.maskData);
-  if (!maskData) return null;
-  return {
-    maskData,
-    sourceMaskData: cloneMaskData(session?.sourceMaskData ?? fallback ?? session?.maskData),
-  };
-}
-
-function snapshotMaskData(snapshot) {
-  return snapshot?.maskData ? snapshot.maskData : snapshot;
-}
-
-function snapshotSourceMaskData(snapshot) {
-  return snapshot?.sourceMaskData ?? snapshot?.maskData ?? snapshot;
-}
-
-function normalizeMaskBounds(bounds, cols, rows) {
-  const minX = Math.max(0, Math.floor(Number(bounds?.minX)));
-  const minY = Math.max(0, Math.floor(Number(bounds?.minY)));
-  const maxX = Math.min(Math.max(0, Number(cols) - 1), Math.ceil(Number(bounds?.maxX)));
-  const maxY = Math.min(Math.max(0, Number(rows) - 1), Math.ceil(Number(bounds?.maxY)));
-  if (![minX, minY, maxX, maxY].every(Number.isFinite)) return null;
-  if (maxX < minX || maxY < minY) return null;
-  return {
-    minX,
-    minY,
-    maxX,
-    maxY,
-    width: (maxX - minX) + 1,
-    height: (maxY - minY) + 1,
-  };
-}
-
-function expandMaskBounds(bounds, x, y, cols, rows) {
-  const existing = normalizeMaskBounds(bounds, cols, rows);
-  const gx = Math.max(0, Math.min(Math.max(0, Number(cols) - 1), Math.floor(Number(x))));
-  const gy = Math.max(0, Math.min(Math.max(0, Number(rows) - 1), Math.floor(Number(y))));
-  if (![gx, gy].every(Number.isFinite)) return existing;
-  if (!existing) return normalizeMaskBounds({ minX: gx, minY: gy, maxX: gx, maxY: gy }, cols, rows);
-  return normalizeMaskBounds({
-    minX: Math.min(existing.minX, gx),
-    minY: Math.min(existing.minY, gy),
-    maxX: Math.max(existing.maxX, gx),
-    maxY: Math.max(existing.maxY, gy),
-  }, cols, rows);
-}
-
-function sameMaskBounds(a, b) {
-  return Boolean(a && b
-    && a.minX === b.minX
-    && a.minY === b.minY
-    && a.maxX === b.maxX
-    && a.maxY === b.maxY
-    && a.width === b.width
-    && a.height === b.height);
-}
-
-function mergeMaskBounds(a, b, cols, rows) {
-  const left = normalizeMaskBounds(a, cols, rows);
-  const right = normalizeMaskBounds(b, cols, rows);
-  if (!left) return right;
-  if (!right) return left;
-  return normalizeMaskBounds({
-    minX: Math.min(left.minX, right.minX),
-    minY: Math.min(left.minY, right.minY),
-    maxX: Math.max(left.maxX, right.maxX),
-    maxY: Math.max(left.maxY, right.maxY),
-  }, cols, rows);
-}
-
-function maskOffsetX(maskData) {
-  return Math.max(0, Math.round(Number(maskData?.offsetX) || 0));
-}
-
-function maskOffsetY(maskData) {
-  return Math.max(0, Math.round(Number(maskData?.offsetY) || 0));
-}
-
-function maskFullCols(maskData) {
-  return Math.max(1, Math.round(Number(maskData?.fullCols) || Number(maskData?.cols) || 1));
-}
-
-function maskFullRows(maskData) {
-  return Math.max(1, Math.round(Number(maskData?.fullRows) || Number(maskData?.rows) || 1));
-}
-
-function normalizeHexColor(value, fallback = "#ff0000") {
-  const raw = String(value ?? "").trim();
-  const match = raw.match(/^#?([0-9a-f]{6})$/i);
-  return match ? `#${match[1].toLowerCase()}` : fallback;
-}
-
-function hexToRgbInt(value) {
-  const hex = normalizeHexColor(value).slice(1);
-  return {
-    r: parseInt(hex.slice(0, 2), 16),
-    g: parseInt(hex.slice(2, 4), 16),
-    b: parseInt(hex.slice(4, 6), 16),
-  };
-}
-
-function getStoredPaintColor(moduleId) {
-  try {
-    return normalizeHexColor(globalThis.localStorage?.getItem?.(`${moduleId}.paintRegionPenColor`), DEFAULT_WATER_OPTIONS.paintColor);
-  } catch (_err) {
-    return DEFAULT_WATER_OPTIONS.paintColor;
-  }
-}
-
-function setStoredPaintColor(moduleId, color) {
-  try {
-    globalThis.localStorage?.setItem?.(`${moduleId}.paintRegionPenColor`, normalizeHexColor(color, DEFAULT_WATER_OPTIONS.paintColor));
-  } catch (_err) {
-    // Non-fatal.
-  }
-}
-
-function getStoredPaintOptions(moduleId) {
-  try {
-    const raw = globalThis.localStorage?.getItem?.(`${moduleId}.paintRegionOptions`);
-    const parsed = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch (_err) {
-    return {};
-  }
-}
-
-function setStoredPaintOptions(moduleId, options = {}) {
-  try {
-    const stored = {
-      brushSizePx: Math.max(1, toFiniteNumber(options.brushSizePx, DEFAULT_WATER_OPTIONS.brushSizePx)),
-      tolerance: Math.max(0, toFiniteNumber(options.tolerance, DEFAULT_WATER_OPTIONS.tolerance)),
-      gridStep: Math.max(1, Math.round(toFiniteNumber(options.gridStep, DEFAULT_WATER_OPTIONS.gridStep))),
-      smoothing: Math.max(0, toFiniteNumber(options.smoothing, DEFAULT_WATER_OPTIONS.smoothing)),
-      featherShrinkPx: toFiniteNumber(options.featherShrinkPx, DEFAULT_WATER_OPTIONS.featherShrinkPx),
-      fillBridgePx: normalizeFillBridgePx(options.fillBridgePx),
-      fillColorMode: String(options.fillColorMode ?? DEFAULT_WATER_OPTIONS.fillColorMode).trim().toLowerCase() === "hsl" ? "hsl" : "rgb",
-      paintColor: normalizeHexColor(options.paintColor, DEFAULT_WATER_OPTIONS.paintColor),
-      paintOpacity: normalizePaintOpacity(options.paintOpacity),
-      hslFillBias: normalizeHslFillBias(options.hslFillBias),
-      paintBorderThickness: clamp(toFiniteNumber(options.paintBorderThickness, DEFAULT_WATER_OPTIONS.paintBorderThickness), 0, 4),
-    };
-    globalThis.localStorage?.setItem?.(`${moduleId}.paintRegionOptions`, JSON.stringify(stored));
-    setStoredPaintColor(moduleId, stored.paintColor);
-  } catch (_err) {
-    // Non-fatal.
-  }
-}
-
-function bytesToBase64(bytes) {
-  if (!bytes?.length) return "";
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-  }
-  return globalThis.btoa?.(binary) ?? "";
-}
-
-function base64ToBytes(value) {
-  try {
-    const binary = globalThis.atob?.(String(value ?? "")) ?? "";
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-    return bytes;
-  } catch (_err) {
-    return null;
-  }
-}
-
-function destroyGraphics(gfx) {
-  if (!gfx) return;
-  try {
-    gfx.parent?.removeChild?.(gfx);
-    gfx.destroy?.({ children: true });
-  } catch (_err) {
-    // Non-fatal.
-  }
-}
-
-function getPreviewLayer() {
-  return canvas?.interface?.primary ?? canvas?.interface ?? canvas?.stage ?? null;
-}
-
-function suppressRegionLayerInteraction() {
-  const layer = canvas?.regions ?? null;
-  if (!layer) return null;
-  const saved = {
-    eventMode: layer.eventMode,
-    interactive: layer.interactive,
-    interactiveChildren: layer.interactiveChildren,
-  };
-  try {
-    layer.eventMode = "none";
-    layer.interactive = false;
-    layer.interactiveChildren = false;
-  } catch (_err) {
-    // Non-fatal.
-  }
-  return () => {
-    try {
-      if (saved.eventMode !== undefined) layer.eventMode = saved.eventMode;
-      if (saved.interactive !== undefined) layer.interactive = saved.interactive;
-      if (saved.interactiveChildren !== undefined) layer.interactiveChildren = saved.interactiveChildren;
-    } catch (_err) {
-      // Non-fatal.
-    }
-  };
-}
-
-function suppressCanvasDragSelection() {
-  const layers = [
-    canvas?.activeLayer,
-    canvas?.regions,
-    canvas?.tokens,
-    canvas?.tiles,
-    canvas?.drawings,
-    canvas?.walls,
-    canvas?.lighting,
-    canvas?.sounds,
-    canvas?.templates,
-  ].filter(Boolean);
-  const uniqueLayers = Array.from(new Set(layers));
-  const dragHandlers = [
-    "_onDragLeftStart",
-    "_onDragLeftMove",
-    "_onDragLeftDrop",
-    "_onDragLeftCancel",
-    "_onClickLeft",
-    "_onClickLeft2",
-  ];
-  const saved = [];
-
-  for (const layer of uniqueLayers) {
-    for (const key of dragHandlers) {
-      if (typeof layer?.[key] !== "function") continue;
-      saved.push({ layer, key, fn: layer[key] });
-      try {
-        layer[key] = function suppressPaintSelectionInteraction(event) {
-          consumePaintPointerEvent(event);
-          return false;
-        };
-      } catch (_err) {
-        // Non-fatal.
-      }
-    }
-  }
-
-  return () => {
-    for (const entry of saved) {
-      try {
-        entry.layer[entry.key] = entry.fn;
-      } catch (_err) {
-        // Non-fatal.
-      }
-    }
-  };
-}
-
-function setRegionPlaceableVisible(region, visible) {
-  const doc = region?.document ?? region;
-  const placeable = region?.object ?? doc?.object ?? canvas?.regions?.get?.(doc?.id);
-  try {
-    if (placeable) {
-      placeable.visible = visible === true;
-      placeable.renderable = visible === true;
-      if (visible !== true) placeable.alpha = 0;
-      else if (Number(placeable.alpha) <= 0) placeable.alpha = 1;
-    }
-  } catch (_err) {
-    // Non-fatal.
-  }
-}
-
-function collectionToArray(collection) {
-  if (!collection) return [];
-  if (Array.isArray(collection)) return collection;
-  if (Array.isArray(collection.contents)) return collection.contents;
-  if (typeof collection.values === "function") return Array.from(collection.values());
-  return [];
-}
-
-function getRegionId(region) {
-  return String(region?.id ?? region?._id ?? region?.document?.id ?? region?.document?._id ?? "");
-}
-
-function candidateShapesToRegionData(candidate) {
-  const shapes = Array.isArray(candidate?.shapes) && candidate.shapes.length
-    ? candidate.shapes
-    : (candidate?.points?.length ? [{ points: candidate.points }] : []);
-  return shapes
-    .filter((shape) => Array.isArray(shape?.points) && shape.points.length >= 3)
-    .map((shape) => {
-      const data = {
-        type: "polygon",
-        points: shape.points.flatMap((point) => [Math.round(point.x), Math.round(point.y)]),
-      };
-      if (shape.isHole === true) data.hole = true;
-      return data;
-    });
-}
-
-function pointsBounds(points) {
-  if (!Array.isArray(points) || !points.length) return null;
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const point of points) {
-    minX = Math.min(minX, Number(point.x));
-    minY = Math.min(minY, Number(point.y));
-    maxX = Math.max(maxX, Number(point.x));
-    maxY = Math.max(maxY, Number(point.y));
-  }
-  if (![minX, minY, maxX, maxY].every(Number.isFinite)) return null;
-  return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
-}
-
-function pointInPolygon(point, polygon) {
-  if (!point || !Array.isArray(polygon) || polygon.length < 3) return false;
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
-    const pi = polygon[i];
-    const pj = polygon[j];
-    const intersects = (
-      (pi.y > point.y) !== (pj.y > point.y) &&
-      point.x < ((pj.x - pi.x) * (point.y - pi.y)) / ((pj.y - pi.y) || 1e-9) + pi.x
-    );
-    if (intersects) inside = !inside;
-  }
-  return inside;
-}
-
-function normalizeRegionShapePoints(shape) {
-  const raw = Array.isArray(shape?.points) ? shape.points : [];
-  if (!raw.length) return [];
-  if (typeof raw[0] === "number") {
-    const out = [];
-    for (let i = 0; i + 1 < raw.length; i += 2) {
-      const x = Number(raw[i]);
-      const y = Number(raw[i + 1]);
-      if (Number.isFinite(x) && Number.isFinite(y)) out.push({ x, y });
-    }
-    return out;
-  }
-  return raw
-    .map((point) => ({ x: Number(point?.x), y: Number(point?.y) }))
-    .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
-}
-
-function regionShapeToObject(shape) {
-  if (!shape) return null;
-  if (typeof shape.toObject === "function") {
-    try {
-      return shape.toObject(false);
-    } catch (_err) {
-      // Fall through to the original object.
-    }
-  }
-  return shape;
-}
-
-function isRegionShapeHole(shape) {
-  const data = regionShapeToObject(shape);
-  const op = String(data?.operation ?? data?.op ?? data?.mode ?? "").trim().toLowerCase();
-  return data?.hole === true
-    || data?.isHole === true
-    || data?.negative === true
-    || data?.positive === false
-    || op === "subtract"
-    || op === "hole"
-    || op === "difference";
-}
-
-function isIndyFxRegionBehavior(behavior) {
-  const type = String(behavior?.type ?? "").trim();
-  return type === REGION_SHADER_BEHAVIOR_TYPE || type === LEGACY_REGION_SHADER_BEHAVIOR_TYPE;
-}
-
-function regionShapeBounds(shape) {
-  const data = regionShapeToObject(shape);
-  if (!data) return null;
-  const type = String(data.type ?? data.shape ?? data.kind ?? "").toLowerCase();
-  if (type === "polygon" || Array.isArray(data.points)) {
-    return pointsBounds(normalizeRegionShapePoints(data));
-  }
-  if (type === "rectangle" || type === "rect" || type === "ellipse" || type === "oval" || type === "circle") {
-    const bounds = normalizeRectBounds(data);
-    if (!bounds) return null;
-    return {
-      minX: bounds.minX,
-      minY: bounds.minY,
-      maxX: bounds.maxX,
-      maxY: bounds.maxY,
-      width: bounds.maxX - bounds.minX,
-      height: bounds.maxY - bounds.minY,
-    };
-  }
-  return null;
-}
-
-function readShapeNumber(shape, names, fallback = NaN) {
-  for (const name of names) {
-    const value = Number(shape?.[name]);
-    if (Number.isFinite(value)) return value;
-  }
-  return fallback;
-}
-
-function normalizeRectBounds(shape) {
-  const bounds = shape?.bounds ?? {};
-  const x1 = readShapeNumber(shape, ["x1", "left", "minX"], readShapeNumber(bounds, ["x", "left", "minX"]));
-  const y1 = readShapeNumber(shape, ["y1", "top", "minY"], readShapeNumber(bounds, ["y", "top", "minY"]));
-  const x = readShapeNumber(shape, ["x"], x1);
-  const y = readShapeNumber(shape, ["y"], y1);
-  const width = readShapeNumber(shape, ["width", "w"], readShapeNumber(bounds, ["width", "w"]));
-  const height = readShapeNumber(shape, ["height", "h"], readShapeNumber(bounds, ["height", "h"]));
-  const x2 = readShapeNumber(shape, ["x2", "right", "maxX"], Number.isFinite(width) ? x + width : NaN);
-  const y2 = readShapeNumber(shape, ["y2", "bottom", "maxY"], Number.isFinite(height) ? y + height : NaN);
-  if (![x, y, x2, y2].every(Number.isFinite)) return null;
-  return {
-    minX: Math.min(x, x2),
-    minY: Math.min(y, y2),
-    maxX: Math.max(x, x2),
-    maxY: Math.max(y, y2),
-  };
-}
-
-function pointInRegionShape(point, shape) {
-  const data = regionShapeToObject(shape);
-  if (!point || !data) return false;
-  const type = String(data.type ?? "").toLowerCase();
-
-  if (type === "polygon" || Array.isArray(data.points)) {
-    const polygon = normalizeRegionShapePoints(data);
-    return polygon.length >= 3 && pointInPolygon(point, polygon);
-  }
-
-  if (type === "rectangle" || type === "rect") {
-    const bounds = normalizeRectBounds(data);
-    return Boolean(bounds
-      && point.x >= bounds.minX
-      && point.x <= bounds.maxX
-      && point.y >= bounds.minY
-      && point.y <= bounds.maxY);
-  }
-
-  if (type === "ellipse" || type === "oval" || type === "circle") {
-    const radius = readShapeNumber(data, ["radius", "r"]);
-    const radiusX = readShapeNumber(data, ["radiusX", "rx"], radius);
-    const radiusY = readShapeNumber(data, ["radiusY", "ry"], radius);
-    if (Number.isFinite(radiusX) && Number.isFinite(radiusY) && radiusX > 0 && radiusY > 0) {
-      const cx = readShapeNumber(data, ["centerX", "cx"], readShapeNumber(data, ["x"]));
-      const cy = readShapeNumber(data, ["centerY", "cy"], readShapeNumber(data, ["y"]));
-      if (Number.isFinite(cx) && Number.isFinite(cy)) {
-        const nx = (point.x - cx) / radiusX;
-        const ny = (point.y - cy) / radiusY;
-        return ((nx * nx) + (ny * ny)) <= 1;
-      }
-    }
-
-    const bounds = normalizeRectBounds(data);
-    if (!bounds) return false;
-    const cx = (bounds.minX + bounds.maxX) * 0.5;
-    const cy = (bounds.minY + bounds.maxY) * 0.5;
-    const rx = Math.max(0.0001, (bounds.maxX - bounds.minX) * 0.5);
-    const ry = Math.max(0.0001, (bounds.maxY - bounds.minY) * 0.5);
-    const nx = (point.x - cx) / rx;
-    const ny = (point.y - cy) / ry;
-    return ((nx * nx) + (ny * ny)) <= 1;
-  }
-
-  return false;
-}
-
-function prepareRegionShape(shape) {
-  const data = regionShapeToObject(shape);
-  if (!data) return null;
-  const type = String(data.type ?? data.shape ?? data.kind ?? "").toLowerCase();
-  const prepared = {
-    data,
-    type,
-    bounds: regionShapeBounds(data),
-    isHole: isRegionShapeHole(data),
-    polygon: null,
-    rectBounds: null,
-  };
-
-  if (type === "polygon" || Array.isArray(data.points)) {
-    prepared.polygon = normalizeRegionShapePoints(data);
-    if (prepared.polygon.length < 3) return null;
-    prepared.bounds = prepared.bounds ?? pointsBounds(prepared.polygon);
-  } else if (type === "rectangle" || type === "rect" || type === "ellipse" || type === "oval" || type === "circle") {
-    prepared.rectBounds = normalizeRectBounds(data);
-    if (!prepared.rectBounds) return null;
-    prepared.bounds = prepared.bounds ?? {
-      minX: prepared.rectBounds.minX,
-      minY: prepared.rectBounds.minY,
-      maxX: prepared.rectBounds.maxX,
-      maxY: prepared.rectBounds.maxY,
-      width: prepared.rectBounds.maxX - prepared.rectBounds.minX,
-      height: prepared.rectBounds.maxY - prepared.rectBounds.minY,
-    };
-  } else {
-    return null;
-  }
-
-  return prepared.bounds ? prepared : null;
-}
-
-function pointInPreparedRegionShape(point, prepared) {
-  if (!point || !prepared) return false;
-  const bounds = prepared.bounds;
-  if (bounds && (point.x < bounds.minX || point.x > bounds.maxX || point.y < bounds.minY || point.y > bounds.maxY)) return false;
-  if (prepared.polygon) return pointInPolygon(point, prepared.polygon);
-
-  const data = prepared.data;
-  const type = prepared.type;
-  if (type === "rectangle" || type === "rect") {
-    const bounds = prepared.rectBounds;
-    return Boolean(bounds
-      && point.x >= bounds.minX
-      && point.x <= bounds.maxX
-      && point.y >= bounds.minY
-      && point.y <= bounds.maxY);
-  }
-
-  if (type === "ellipse" || type === "oval" || type === "circle") {
-    const radius = readShapeNumber(data, ["radius", "r"]);
-    const radiusX = readShapeNumber(data, ["radiusX", "rx"], radius);
-    const radiusY = readShapeNumber(data, ["radiusY", "ry"], radius);
-    if (Number.isFinite(radiusX) && Number.isFinite(radiusY) && radiusX > 0 && radiusY > 0) {
-      const cx = readShapeNumber(data, ["centerX", "cx"], readShapeNumber(data, ["x"]));
-      const cy = readShapeNumber(data, ["centerY", "cy"], readShapeNumber(data, ["y"]));
-      if (Number.isFinite(cx) && Number.isFinite(cy)) {
-        const nx = (point.x - cx) / radiusX;
-        const ny = (point.y - cy) / radiusY;
-        return ((nx * nx) + (ny * ny)) <= 1;
-      }
-    }
-
-    const bounds = prepared.rectBounds;
-    if (!bounds) return false;
-    const cx = (bounds.minX + bounds.maxX) * 0.5;
-    const cy = (bounds.minY + bounds.maxY) * 0.5;
-    const rx = Math.max(0.0001, (bounds.maxX - bounds.minX) * 0.5);
-    const ry = Math.max(0.0001, (bounds.maxY - bounds.minY) * 0.5);
-    const nx = (point.x - cx) / rx;
-    const ny = (point.y - cy) / ry;
-    return ((nx * nx) + (ny * ny)) <= 1;
-  }
-
-  return false;
-}
+import {
+  collectionToArray,
+  consumePaintPointerEvent,
+  getDomPointerWorldPoint,
+  getPointerWorldPoint,
+  getPreviewLayer,
+  getRegionId,
+  getSceneBackgroundPath,
+  getSceneImageMapping,
+  getWorldHitRadius,
+  imageGridPointToScene,
+  isIndyFxRegionBehavior,
+  isPrimaryDomPointerEvent,
+  isPrimaryPointerEvent,
+  sceneToImagePoint,
+  setRegionPlaceableVisible,
+  suppressCanvasDragSelection,
+  suppressRegionLayerInteraction,
+} from "./region-painter-foundry.js";
+import {
+  candidateShapesToRegionData,
+  pointInPolygon,
+  pointInPreparedRegionShape,
+  pointsBounds,
+  polygonArea,
+  prepareRegionShape,
+  simplifyClosedPolygon,
+} from "./region-painter-geometry.js";
+import {
+  base64ToBytes,
+  bytesToBase64,
+  cloneMaskData,
+  clonePaintSnapshot,
+  expandMaskBounds,
+  maskFullCols,
+  maskFullRows,
+  maskOffsetX,
+  maskOffsetY,
+  mergeMaskBounds,
+  normalizeMaskBounds,
+  snapshotMaskData,
+  snapshotSourceMaskData,
+} from "./region-painter-mask.js";
+import {
+  componentMaskWithBounds,
+  computeMaskBounds,
+  emptyDerivedMaskData,
+  expandBoundsByRadius,
+  isMaskCellSet,
+  l1DistanceTransform,
+} from "./region-painter-morphology.js";
+import {
+  getStoredPaintColor,
+  getStoredPaintOptions,
+  isWaterLikeRgb,
+  normalizeFillBridgePx,
+  normalizeHexColor,
+  normalizeHslFillBias,
+  normalizeOptions,
+  normalizePaintOpacity,
+  rgb255ToHsl,
+  setStoredPaintColor,
+  setStoredPaintOptions,
+} from "./region-painter-options.js";
+import {
+  createPaintPreviewFromMask,
+  destroyGraphics,
+  destroyPreviewSprite,
+  updatePaintPreviewDirtyRect,
+} from "./region-painter-preview.js";
+import {
+  applyRegionShapeToMask,
+  maskFromRegionShapes,
+} from "./region-painter-raster.js";
+import {
+  clamp,
+  debugTiming,
+  debugUiDisplayStyle,
+  formatText,
+  getStoredPaintHelpOpen,
+  localizeText,
+  nowMs,
+  paintHelpDisplayStyle,
+  roundTimingMs,
+  setStoredPaintHelpOpen,
+  toFiniteNumber,
+} from "./region-painter-utils.js";
 
 export class WaterRegionDetector {
   static #moduleId = "indy-regions";
@@ -1059,8 +185,7 @@ export class WaterRegionDetector {
   }
 
   static #isMaskCellSet(mask, cols, rows, x, y) {
-    if (x < 0 || x >= cols || y < 0 || y >= rows) return false;
-    return mask[y * cols + x] === 1;
+    return isMaskCellSet(mask, cols, rows, x, y);
   }
 
   static #traceMaskBoundaries(mask, cols, rows) {
@@ -1369,23 +494,7 @@ export class WaterRegionDetector {
   }
 
   static #computeMaskBounds(maskData) {
-    const { mask, cols, rows } = maskData ?? {};
-    if (!mask || !cols || !rows) return null;
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    for (let y = 0; y < rows; y += 1) {
-      const rowOffset = y * cols;
-      for (let x = 0; x < cols; x += 1) {
-        if (!mask[rowOffset + x]) continue;
-        minX = Math.min(minX, x);
-        minY = Math.min(minY, y);
-        maxX = Math.max(maxX, x);
-        maxY = Math.max(maxY, y);
-      }
-    }
-    return normalizeMaskBounds({ minX, minY, maxX, maxY }, cols, rows);
+    return computeMaskBounds(maskData);
   }
 
   static #getMaskBounds(maskData) {
@@ -1498,76 +607,19 @@ export class WaterRegionDetector {
   }
 
   static #expandBoundsByRadius(bounds, radius, cols, rows) {
-    if (!bounds) return null;
-    return normalizeMaskBounds({
-      minX: bounds.minX - radius,
-      minY: bounds.minY - radius,
-      maxX: bounds.maxX + radius,
-      maxY: bounds.maxY + radius,
-    }, cols, rows);
+    return expandBoundsByRadius(bounds, radius, cols, rows);
   }
 
   static #l1DistanceTransform(dist, width, height) {
-    const inf = 0x3fffffff;
-    for (let y = 0; y < height; y += 1) {
-      const row = y * width;
-      const prevRow = row - width;
-      for (let x = 0; x < width; x += 1) {
-        const i = row + x;
-        let d = dist[i];
-        if (x > 0) d = Math.min(d, dist[i - 1] + 1);
-        if (y > 0) d = Math.min(d, dist[prevRow + x] + 1);
-        dist[i] = d > inf ? inf : d;
-      }
-    }
-    for (let y = height - 1; y >= 0; y -= 1) {
-      const row = y * width;
-      const nextRow = row + width;
-      for (let x = width - 1; x >= 0; x -= 1) {
-        const i = row + x;
-        let d = dist[i];
-        if (x + 1 < width) d = Math.min(d, dist[i + 1] + 1);
-        if (y + 1 < height) d = Math.min(d, dist[nextRow + x] + 1);
-        dist[i] = d > inf ? inf : d;
-      }
-    }
-    return dist;
+    return l1DistanceTransform(dist, width, height);
   }
 
   static #componentMaskWithBounds(cells) {
-    if (!Array.isArray(cells) || !cells.length) return null;
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    for (const cell of cells) {
-      minX = Math.min(minX, cell.x);
-      minY = Math.min(minY, cell.y);
-      maxX = Math.max(maxX, cell.x);
-      maxY = Math.max(maxY, cell.y);
-    }
-    if (![minX, minY, maxX, maxY].every(Number.isFinite)) return null;
-    const cols = Math.max(1, (maxX - minX) + 1);
-    const rows = Math.max(1, (maxY - minY) + 1);
-    const mask = new Uint8Array(cols * rows);
-    for (const cell of cells) {
-      mask[(cell.y - minY) * cols + (cell.x - minX)] = 1;
-    }
-    return { mask, cols, rows, offsetX: minX, offsetY: minY };
+    return componentMaskWithBounds(cells);
   }
 
   static #emptyDerivedMaskData(maskData) {
-    return {
-      mask: new Uint8Array(0),
-      cols: 0,
-      rows: 0,
-      gridStep: maskData?.gridStep,
-      offsetX: maskOffsetX(maskData),
-      offsetY: maskOffsetY(maskData),
-      fullCols: maskFullCols(maskData),
-      fullRows: maskFullRows(maskData),
-      bounds: null,
-    };
+    return emptyDerivedMaskData(maskData);
   }
 
   static #smallRadiusDilateMaskData(maskData, radius) {
@@ -2509,149 +1561,23 @@ export class WaterRegionDetector {
   }
 
   static paintPreviewFromMask(maskData, color = DEFAULT_WATER_OPTIONS.paintColor, opacity = DEFAULT_WATER_OPTIONS.paintOpacity) {
-    const totalStart = nowMs();
-    const { mask, alphaMask, cols, rows, gridStep } = maskData ?? {};
-    if (!mask || !cols || !rows || !gridStep) return null;
-    const imgW = WaterRegionDetector.#cachedImgW;
-    const imgH = WaterRegionDetector.#cachedImgH;
-    if (!imgW || !imgH) return null;
-    const bounds = WaterRegionDetector.#getMaskBounds(maskData);
-    if (!bounds) return null;
-    const rgb = hexToRgbInt(color);
-    const maskCanvas = document.createElement("canvas");
-    maskCanvas.width = bounds.width;
-    maskCanvas.height = bounds.height;
-    const ctx = maskCanvas.getContext("2d");
-    if (!ctx) return null;
-    ctx.imageSmoothingEnabled = false;
-
-    const imageData = ctx.createImageData(bounds.width, bounds.height);
-    const data = imageData.data;
-    const pixelsStart = nowMs();
-    let visibleCells = 0;
-    for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
-      const sourceRowOffset = y * cols;
-      const targetRowOffset = (y - bounds.minY) * bounds.width;
-      for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
-        const sourceIndex = sourceRowOffset + x;
-        if (!mask[sourceIndex]) continue;
-        const alpha = alphaMask?.[sourceIndex] ?? 255;
-        if (alpha <= 0) continue;
-        visibleCells += 1;
-        const di = (targetRowOffset + (x - bounds.minX)) * 4;
-        data[di] = rgb.r;
-        data[di + 1] = rgb.g;
-        data[di + 2] = rgb.b;
-        data[di + 3] = alpha;
-      }
-    }
-    ctx.putImageData(imageData, 0, 0);
-    const pixelsMs = nowMs() - pixelsStart;
-
-    const textureStart = nowMs();
-    const texture = PIXI.Texture.from(maskCanvas);
-    const sprite = new PIXI.Sprite(texture);
-    const textureMs = nowMs() - textureStart;
-    const map = getSceneImageMapping(imgW, imgH);
-    const scaleX = map.sceneWidth / imgW;
-    const scaleY = map.sceneHeight / imgH;
-    sprite.x = map.sceneX + (bounds.minX * gridStep * scaleX);
-    sprite.y = map.sceneY + (bounds.minY * gridStep * scaleY);
-    sprite.width = bounds.width * gridStep * scaleX;
-    sprite.height = bounds.height * gridStep * scaleY;
-    sprite.alpha = normalizePaintOpacity(opacity);
-    sprite.eventMode = "none";
-    sprite.zIndex = 1000000;
-    sprite._indyRegionsPreviewCanvas = maskCanvas;
-    sprite._indyRegionsPreviewCtx = ctx;
-    sprite._indyRegionsPreviewBounds = { ...bounds };
-    sprite._indyRegionsPreviewColor = normalizeHexColor(color, DEFAULT_WATER_OPTIONS.paintColor);
-    sprite._indyRegionsPreviewOpacity = normalizePaintOpacity(opacity);
-    debugTiming(WaterRegionDetector.#moduleId, "paint-preview-from-mask", {
-      gridStep,
-      cols,
-      rows,
-      cells: cols * rows,
-      previewCells: bounds.width * bounds.height,
-      bounds,
-      visibleCells,
-      pixelsMs: roundTimingMs(pixelsMs),
-      textureMs: roundTimingMs(textureMs),
-      totalMs: roundTimingMs(nowMs() - totalStart),
+    return createPaintPreviewFromMask(maskData, {
+      color,
+      opacity,
+      imgW: WaterRegionDetector.#cachedImgW,
+      imgH: WaterRegionDetector.#cachedImgH,
+      getMaskBounds: (data) => WaterRegionDetector.#getMaskBounds(data),
+      moduleId: WaterRegionDetector.#moduleId,
     });
-    return sprite;
   }
 
   static #updatePaintPreviewDirtyRect(session, dirtyBounds, color = DEFAULT_WATER_OPTIONS.paintColor, opacity = DEFAULT_WATER_OPTIONS.paintOpacity) {
-    const totalStart = nowMs();
-    const sprite = session?.previewSprite;
-    const maskData = session?.maskData;
-    const { mask, cols, rows } = maskData ?? {};
-    const previewBounds = sprite?._indyRegionsPreviewBounds;
-    const ctx = sprite?._indyRegionsPreviewCtx;
-    if (!sprite || !ctx || !mask || !cols || !rows || !previewBounds) return false;
-    const currentBounds = WaterRegionDetector.#getMaskBounds(maskData);
-    const normalizedDirty = normalizeMaskBounds(dirtyBounds, cols, rows);
-    const normalizedColor = normalizeHexColor(color, DEFAULT_WATER_OPTIONS.paintColor);
-    const normalizedOpacity = normalizePaintOpacity(opacity);
-    if (!currentBounds || !normalizedDirty) return false;
-    if (!sameMaskBounds(currentBounds, previewBounds)) return false;
-    if (sprite._indyRegionsPreviewColor !== normalizedColor) return false;
-    sprite.alpha = normalizedOpacity;
-    sprite._indyRegionsPreviewOpacity = normalizedOpacity;
-
-    const updateBounds = normalizeMaskBounds({
-      minX: Math.max(previewBounds.minX, normalizedDirty.minX),
-      minY: Math.max(previewBounds.minY, normalizedDirty.minY),
-      maxX: Math.min(previewBounds.maxX, normalizedDirty.maxX),
-      maxY: Math.min(previewBounds.maxY, normalizedDirty.maxY),
-    }, cols, rows);
-    if (!updateBounds) return true;
-
-    const rgb = hexToRgbInt(normalizedColor);
-    const imageData = ctx.createImageData(updateBounds.width, updateBounds.height);
-    const data = imageData.data;
-    const pixelsStart = nowMs();
-    let visibleCells = 0;
-    for (let y = updateBounds.minY; y <= updateBounds.maxY; y += 1) {
-      const sourceRowOffset = y * cols;
-      const targetRowOffset = (y - updateBounds.minY) * updateBounds.width;
-      for (let x = updateBounds.minX; x <= updateBounds.maxX; x += 1) {
-        if (!mask[sourceRowOffset + x]) continue;
-        visibleCells += 1;
-        const di = (targetRowOffset + (x - updateBounds.minX)) * 4;
-        data[di] = rgb.r;
-        data[di + 1] = rgb.g;
-        data[di + 2] = rgb.b;
-        data[di + 3] = maskData.alphaMask?.[sourceRowOffset + x] ?? 255;
-      }
-    }
-    const canvasX = updateBounds.minX - previewBounds.minX;
-    const canvasY = updateBounds.minY - previewBounds.minY;
-    ctx.clearRect(canvasX, canvasY, updateBounds.width, updateBounds.height);
-    ctx.putImageData(imageData, canvasX, canvasY);
-    const pixelsMs = nowMs() - pixelsStart;
-
-    const textureStart = nowMs();
-    try {
-      sprite.texture?.update?.();
-      sprite.texture?.baseTexture?.update?.();
-    } catch (_err) {
-      // Non-fatal. The next full rebuild will recover if this renderer does not expose update.
-    }
-    const textureMs = nowMs() - textureStart;
-    debugTiming(WaterRegionDetector.#moduleId, "paint-preview-dirty-rect", {
-      gridStep: maskData.gridStep ?? 0,
-      cols,
-      rows,
-      dirtyCells: updateBounds.width * updateBounds.height,
-      visibleCells,
-      bounds: updateBounds,
-      pixelsMs: roundTimingMs(pixelsMs),
-      textureMs: roundTimingMs(textureMs),
-      totalMs: roundTimingMs(nowMs() - totalStart),
+    return updatePaintPreviewDirtyRect(session, dirtyBounds, {
+      color,
+      opacity,
+      getMaskBounds: (data) => WaterRegionDetector.#getMaskBounds(data),
+      moduleId: WaterRegionDetector.#moduleId,
     });
-    return true;
   }
 
   static #setPaintMaskPreview(session) {
@@ -2691,34 +1617,14 @@ export class WaterRegionDetector {
   }
 
   static #maskFromRegionShapes(region, options = {}) {
-    const opts = normalizeOptions(options);
-    const maskData = WaterRegionDetector.#createEmptyMaskData(opts);
-    const shapes = Array.isArray(region?.shapes)
-      ? region.shapes
-      : (Array.isArray(region?.document?.shapes) ? region.document.shapes : []);
-    if (!shapes.length) return null;
-
-    const imgW = WaterRegionDetector.#cachedImgW;
-    const imgH = WaterRegionDetector.#cachedImgH;
-    const { mask, cols, rows, gridStep } = maskData;
-    const map = getSceneImageMapping(imgW, imgH);
-    const scaleX = map.sceneWidth / imgW;
-    const scaleY = map.sceneHeight / imgH;
-
-    const usableShapes = shapes
-      .map((shape) => prepareRegionShape(shape))
-      .filter((shape) => shape && typeof shape === "object");
-    if (!usableShapes.length) return null;
-    if (!usableShapes.some((shape) => !shape.isHole)) return null;
-
-    for (const shape of usableShapes.filter((entry) => !entry.isHole)) {
-      WaterRegionDetector.#applyRegionShapeToMask(maskData, shape, "add");
-    }
-    for (const shape of usableShapes.filter((entry) => entry.isHole)) {
-      WaterRegionDetector.#applyRegionShapeToMask(maskData, shape, "subtract");
-    }
-
-    return WaterRegionDetector.#fillMaskAlpha(maskData, 255);
+    return maskFromRegionShapes(region, {
+      options,
+      imgW: WaterRegionDetector.#cachedImgW,
+      imgH: WaterRegionDetector.#cachedImgH,
+      createEmptyMaskData: (opts) => WaterRegionDetector.#createEmptyMaskData(opts),
+      fillMaskAlpha: (maskData, alpha) => WaterRegionDetector.#fillMaskAlpha(maskData, alpha),
+      invalidateMaskDerivedData: (maskData, opts) => WaterRegionDetector.#invalidateMaskDerivedData(maskData, opts),
+    });
   }
 
   static #getCurrentRegionSources(session) {
@@ -2774,64 +1680,13 @@ export class WaterRegionDetector {
   }
 
   static #applyRegionShapeToMask(maskData, shape, mode = "add", changeRecorder = null) {
-    const { mask, cols, rows, gridStep } = maskData ?? {};
-    if (!mask || !cols || !rows || !gridStep || !shape) return 0;
-    const imgW = WaterRegionDetector.#cachedImgW;
-    const imgH = WaterRegionDetector.#cachedImgH;
-    if (!imgW || !imgH) return 0;
-    const map = getSceneImageMapping(imgW, imgH);
-    const scaleX = map.sceneWidth / imgW;
-    const scaleY = map.sceneHeight / imgH;
-    const prepared = (shape?.polygon || shape?.rectBounds) ? shape : prepareRegionShape(shape);
-    if (!prepared) return 0;
-    const bounds = prepared.bounds;
-    const imageMinX = bounds ? (bounds.minX - map.sceneX) / scaleX : 0;
-    const imageMinY = bounds ? (bounds.minY - map.sceneY) / scaleY : 0;
-    const imageMaxX = bounds ? (bounds.maxX - map.sceneX) / scaleX : imgW;
-    const imageMaxY = bounds ? (bounds.maxY - map.sceneY) / scaleY : imgH;
-    const minGX = Math.max(0, Math.floor(Math.min(imageMinX, imageMaxX) / gridStep) - 1);
-    const minGY = Math.max(0, Math.floor(Math.min(imageMinY, imageMaxY) / gridStep) - 1);
-    const maxGX = Math.min(cols - 1, Math.ceil(Math.max(imageMinX, imageMaxX) / gridStep) + 1);
-    const maxGY = Math.min(rows - 1, Math.ceil(Math.max(imageMinY, imageMaxY) / gridStep) + 1);
-    if (maxGX < minGX || maxGY < minGY) return 0;
-
-    const op = String(mode ?? "add").trim().toLowerCase();
-    let changed = 0;
-    let changedBounds = null;
-    for (let y = minGY; y <= maxGY; y += 1) {
-      const rowOffset = y * cols;
-      for (let x = minGX; x <= maxGX; x += 1) {
-        const scenePoint = {
-          x: map.sceneX + ((x + 0.5) * gridStep * scaleX),
-          y: map.sceneY + ((y + 0.5) * gridStep * scaleY),
-        };
-        if (!pointInPreparedRegionShape(scenePoint, prepared)) continue;
-        const idx = rowOffset + x;
-        if (op === "subtract" || op === "remove") {
-          if (!mask[idx]) continue;
-          changeRecorder?.(maskData, idx, mask[idx]);
-          mask[idx] = 0;
-        } else {
-          if (mask[idx]) continue;
-          changeRecorder?.(maskData, idx, mask[idx]);
-          mask[idx] = 1;
-        }
-        changed += 1;
-        changedBounds = expandMaskBounds(changedBounds, x, y, cols, rows);
-      }
-    }
-
-    if (changed > 0) {
-      maskData._lastChangedBounds = changedBounds;
-      if (op === "subtract" || op === "remove") {
-        WaterRegionDetector.#invalidateMaskDerivedData(maskData, { boundsDirty: true });
-      } else {
-        maskData.bounds = mergeMaskBounds(maskData.bounds, changedBounds, cols, rows);
-        maskData.boundsDirty = false;
-        WaterRegionDetector.#invalidateMaskDerivedData(maskData);
-      }
-    }
-    return changed;
+    return applyRegionShapeToMask(maskData, shape, {
+      mode,
+      imgW: WaterRegionDetector.#cachedImgW,
+      imgH: WaterRegionDetector.#cachedImgH,
+      changeRecorder,
+      invalidateMaskDerivedData: (data, opts) => WaterRegionDetector.#invalidateMaskDerivedData(data, opts),
+    });
   }
 
   static #applyFillToMask(maskData, sceneX, sceneY, mode = "add", options = {}, { buildCandidate = true, changeRecorder = null } = {}) {
