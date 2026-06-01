@@ -11,6 +11,18 @@
       "ShowPaintHelp": {
         "Name": "リージョンペイントのヘルプを表示",
         "Hint": "リージョンペイントダイアログにマウスとキーボードの短いヘルプを表示します。"
+      },
+      "PaintGridStepDebounce": {
+        "Name": "?????????",
+        "Hint": "??????????????????????????????????????"
+      },
+      "PaintRangeDebounce": {
+        "Name": "????????????",
+        "Hint": "??????????????????????????????????????????????????"
+      },
+      "PaintInputDebounce": {
+        "Name": "?????????",
+        "Hint": "????????????????????????????????????????????????"
       }
     },
     "Dialog": {
@@ -34,14 +46,15 @@
         "BrushSize": "ブラシサイズ",
         "FillTolerance": "塗りつぶし許容値",
         "HslFillBias": "HSL塗りつぶしバイアス",
-        "Hue": "??",
-        "Lightness": "??",
+        "Hue": "色相",
+        "Lightness": "明度",
         "FillBridge": "塗りつぶしブリッジ",
-        "FillHoles": "?????",
+        "FillHoles": "穴を埋める",
         "GridStep": "グリッド間隔",
         "ShrinkGrow": "縮小 / 拡張",
         "BorderSmooth": "境界の滑らかさ",
-        "BorderThickness": "境界の太さ"
+        "BorderThickness": "境界の太さ",
+        "BorderSmoothType": "境界スムーズ方式"
       },
       "Hint": {
         "PaintOpacity": "0 は透明、1 は不透明です。",
@@ -49,11 +62,12 @@
         "FillTolerance": "低いほど厳密、高いほど近い色を広く塗りつぶします。",
         "HslFillBias": "-1 は明度重視、0 は均等、1 は色相重視です。",
         "FillBridge": "0 は厳密です。高い値ほど小さな隙間を越えます。",
-        "FillHoles": "?????????????????????????????",
+        "FillHoles": "内部の穴を最終的なリージョン境界の計算時に埋めます。",
         "GridStep": "1 が最も精密です。高い値ほど速くなりますが粗くなります。",
         "ShrinkGrow": "負の値で縮小、正の値で最終境界を拡張します。",
         "BorderSmooth": "0 は詳細を保持します。高い値ほどギザギザの縁を単純化します。",
-        "BorderThickness": "0 はライブ境界を隠します。高い値ほど見やすくなります。"
+        "BorderThickness": "0 はライブ境界を隠します。高い値ほど見やすくなります。",
+        "BorderSmoothType": "マスク処理後にトレースされた境界をどの方式で滑らかにするかを選びます。"
       },
       "Status": {
         "Paint": "キャンバス上でペイントしてリージョンに追加します。Shift+左クリックで減算します。"
@@ -64,6 +78,11 @@
         "CreateRegion": "リージョンを作成",
         "UpdateRegion": "リージョンを更新",
         "Cancel": "キャンセル"
+      },
+      "BorderSmoothType": {
+        "Catmull": "Catmull-Rom",
+        "Rounded": "丸め",
+        "Relaxed": "リラックス"
       }
     },
     "Notifications": {

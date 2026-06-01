@@ -6,14 +6,18 @@ import {
   pointInPolygon,
   pointsBounds,
   polygonArea,
-  simplifyClosedPolygon,
+  smoothBoundaryPolygon,
 } from "./region-painter-geometry.js";
 import { normalizeMaskBounds } from "./region-painter-mask.js";
 import {
   findMaskComponentsScanline,
   traceRunComponentBoundaries,
 } from "./region-painter-morphology.js";
-import { normalizeOptions } from "./region-painter-options.js";
+import {
+  normalizeBorderSmoothType,
+  normalizeOptions,
+} from "./region-painter-options.js";
+import { toFiniteNumber } from "./region-painter-utils.js";
 
 function nowMs() {
   return globalThis.performance?.now?.() ?? Date.now();
@@ -36,7 +40,8 @@ function imageGridPointToScene(point, mapping) {
 function candidateFromMask(maskData, options = {}, mapping = {}) {
   const totalStart = nowMs();
   const opts = normalizeOptions(options);
-  const smoothing = Number(opts.smoothing) || DEFAULT_WATER_OPTIONS.smoothing;
+  const smoothing = Math.max(0, toFiniteNumber(opts.smoothing, DEFAULT_WATER_OPTIONS.smoothing));
+  const borderSmoothType = normalizeBorderSmoothType(opts.borderSmoothType);
   const fillHoles = opts.fillHoles === true;
   const { mask, cols, rows, gridStep } = maskData ?? {};
   if (!mask || !cols || !rows || !gridStep) return { candidate: null, timing: { totalMs: 0 } };
@@ -83,7 +88,7 @@ function candidateFromMask(maskData, options = {}, mapping = {}) {
       if (isHole && Math.abs(polygonArea(rawBoundary)) < MIN_HOLE_LOOP_AREA_CELLS) continue;
       tracedBoundaryPoints += rawBoundary.length;
       const simplifyStart = nowMs();
-      const simplified = simplifyClosedPolygon(rawBoundary, smoothing);
+      const simplified = smoothBoundaryPolygon(rawBoundary, smoothing, borderSmoothType);
       simplifyMs += nowMs() - simplifyStart;
       if (simplified.length < 3) continue;
       simplifiedBoundaryPoints += simplified.length;
@@ -166,6 +171,7 @@ function candidateFromMask(maskData, options = {}, mapping = {}) {
       tracedBoundaryPoints,
       simplifiedBoundaryPoints,
       smoothing,
+      borderSmoothType,
       fillHoles,
       areaMs: roundTimingMs(areaMs),
       componentsMs: roundTimingMs(componentsMs),

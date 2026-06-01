@@ -11,6 +11,18 @@
       "ShowPaintHelp": {
         "Name": "영역 칠하기 도움말 표시",
         "Hint": "영역 칠하기 대화상자에 짧은 마우스/키보드 도움말을 표시합니다."
+      },
+      "PaintGridStepDebounce": {
+        "Name": "??? ?? ??",
+        "Hint": "??? ??? ??? ? ??? ???? ?? ??? ???? ?? ??(???)???."
+      },
+      "PaintRangeDebounce": {
+        "Name": "??? ???? ??",
+        "Hint": "??? ???? ????? ????? ?? ?? ??? ?? ???? ???? ?? ??(???)???."
+      },
+      "PaintInputDebounce": {
+        "Name": "??? ?? ??",
+        "Hint": "??, ???? ?? ?? ??? ??? ? ?? ??? ?? ???? ???? ?? ??(???)???."
       }
     },
     "Dialog": {
@@ -34,14 +46,15 @@
         "BrushSize": "브러시 크기",
         "FillTolerance": "채우기 허용치",
         "HslFillBias": "HSL 채우기 편향",
-        "Hue": "??",
-        "Lightness": "??",
+        "Hue": "색상",
+        "Lightness": "밝기",
         "FillBridge": "채우기 연결",
-        "FillHoles": "?? ???",
+        "FillHoles": "구멍 채우기",
         "GridStep": "그리드 단계",
         "ShrinkGrow": "축소 / 확장",
         "BorderSmooth": "테두리 부드럽게",
-        "BorderThickness": "테두리 두께"
+        "BorderThickness": "테두리 두께",
+        "BorderSmoothType": "경계 스무딩 방식"
       },
       "Hint": {
         "PaintOpacity": "0은 투명, 1은 불투명입니다.",
@@ -49,11 +62,12 @@
         "FillTolerance": "낮을수록 엄격하고, 높을수록 비슷한 색을 더 많이 채웁니다.",
         "HslFillBias": "-1은 밝기 우선, 0은 균형, 1은 색상 우선입니다.",
         "FillBridge": "0은 엄격하며, 값이 높을수록 작은 틈을 건너뜁니다.",
-        "FillHoles": "?? ?? ??? ??? ? ?? ??? ????.",
+        "FillHoles": "최종 영역 경계를 계산할 때 내부 구멍을 채웁니다.",
         "GridStep": "1이 가장 정밀합니다. 값이 높을수록 빠르지만 거칠어집니다.",
         "ShrinkGrow": "음수는 줄이고, 양수는 최종 경계를 확장합니다.",
         "BorderSmooth": "0은 세부를 유지하고, 값이 높을수록 들쭉날쭉한 가장자리를 단순화합니다.",
-        "BorderThickness": "0은 실시간 테두리를 숨기고, 값이 높을수록 더 잘 보입니다."
+        "BorderThickness": "0은 실시간 테두리를 숨기고, 값이 높을수록 더 잘 보입니다.",
+        "BorderSmoothType": "마스크 처리 후 추적된 경계를 어떤 방식으로 부드럽게 할지 선택합니다."
       },
       "Status": {
         "Paint": "캔버스에 칠해 영역에 추가합니다. Shift-왼쪽 클릭은 뺍니다."
@@ -64,6 +78,11 @@
         "CreateRegion": "영역 만들기",
         "UpdateRegion": "영역 업데이트",
         "Cancel": "취소"
+      },
+      "BorderSmoothType": {
+        "Catmull": "Catmull-Rom",
+        "Rounded": "둥글게",
+        "Relaxed": "완화"
       }
     },
     "Notifications": {

@@ -102,18 +102,19 @@
   </div>
 
   <div class="indy-form-row">
-    <label title="{{hints.maskSmooth}}">{{labels.maskSmooth}}</label>
+    <label title="{{hints.borderSmooth}}">{{labels.borderSmooth}}</label>
     <div class="indy-form-fields">
-      <input type="range" name="morphSmoothPx" min="0" max="32" step="1" value="{{values.morphSmoothPx}}" title="{{hints.maskSmooth}}">
-      <input type="number" name="morphSmoothPx" min="0" max="32" step="1" value="{{values.morphSmoothPx}}" title="{{hints.maskSmooth}}">
+      <input type="range" name="smoothing" min="0" max="32" step="0.25" value="{{values.smoothing}}" title="{{hints.borderSmooth}}">
+      <input type="number" name="smoothing" min="0" max="32" step="0.25" value="{{values.smoothing}}" title="{{hints.borderSmooth}}">
     </div>
   </div>
 
   <div class="indy-form-row">
-    <label title="{{hints.borderSmooth}}">{{labels.borderSmooth}}</label>
-    <div class="indy-form-fields">
-      <input type="range" name="smoothing" min="0" max="16" step="0.25" value="{{values.smoothing}}" title="{{hints.borderSmooth}}">
-      <input type="number" name="smoothing" min="0" max="16" step="0.25" value="{{values.smoothing}}" title="{{hints.borderSmooth}}">
+    <label title="{{hints.borderSmoothType}}">{{labels.borderSmoothType}}</label>
+    <div class="indy-form-fields indy-select-row">
+      <select name="borderSmoothType" title="{{hints.borderSmoothType}}">
+        {{{borderSmoothTypeOptions}}}
+      </select>
     </div>
   </div>
 

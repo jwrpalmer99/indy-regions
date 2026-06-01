@@ -1,4 +1,5 @@
 import {
+  BORDER_SMOOTH_TYPES,
   DEFAULT_WATER_OPTIONS,
   MAX_FILL_BRIDGE_PX,
 } from "./region-painter-constants.js";
@@ -30,9 +31,16 @@ export function normalizeOptions(options = {}) {
     ...(options && typeof options === "object" ? options : {}),
   };
   merged.fillBridgePx = clamp(toFiniteNumber(merged.fillBridgePx, DEFAULT_WATER_OPTIONS.fillBridgePx), 0, MAX_FILL_BRIDGE_PX);
-  merged.morphSmoothPx = clamp(toFiniteNumber(merged.morphSmoothPx, DEFAULT_WATER_OPTIONS.morphSmoothPx), 0, 32);
+  merged.borderSmoothType = normalizeBorderSmoothType(merged.borderSmoothType);
   merged.fillHoles = merged.fillHoles === true;
   return merged;
+}
+
+export function normalizeBorderSmoothType(value, fallback = DEFAULT_WATER_OPTIONS.borderSmoothType) {
+  const raw = String(value ?? fallback ?? DEFAULT_WATER_OPTIONS.borderSmoothType).trim().toLowerCase();
+  if (raw === "current") return "catmull";
+  if (raw === "area") return DEFAULT_WATER_OPTIONS.borderSmoothType;
+  return BORDER_SMOOTH_TYPES.includes(raw) ? raw : DEFAULT_WATER_OPTIONS.borderSmoothType;
 }
 
 export function normalizeFillBridgePx(value, fallback = DEFAULT_WATER_OPTIONS.fillBridgePx) {
@@ -120,7 +128,7 @@ export function setStoredPaintOptions(moduleId, options = {}) {
       tolerance: Math.max(0, toFiniteNumber(options.tolerance, DEFAULT_WATER_OPTIONS.tolerance)),
       gridStep: Math.max(1, Math.round(toFiniteNumber(options.gridStep, DEFAULT_WATER_OPTIONS.gridStep))),
       smoothing: Math.max(0, toFiniteNumber(options.smoothing, DEFAULT_WATER_OPTIONS.smoothing)),
-      morphSmoothPx: clamp(toFiniteNumber(options.morphSmoothPx, DEFAULT_WATER_OPTIONS.morphSmoothPx), 0, 32),
+      borderSmoothType: normalizeBorderSmoothType(options.borderSmoothType),
       featherShrinkPx: toFiniteNumber(options.featherShrinkPx, DEFAULT_WATER_OPTIONS.featherShrinkPx),
       fillBridgePx: normalizeFillBridgePx(options.fillBridgePx),
       fillColorMode: String(options.fillColorMode ?? DEFAULT_WATER_OPTIONS.fillColorMode).trim().toLowerCase() === "hsl" ? "hsl" : "rgb",

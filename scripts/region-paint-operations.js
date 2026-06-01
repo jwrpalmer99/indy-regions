@@ -35,7 +35,7 @@ export function stampPaintSession(session, point, mode, options = null, {
   session.paintRefreshTimer = setTimeout(() => {
     session.paintRefreshTimer = null;
     void refreshCandidate?.(session);
-  }, 80);
+  }, 10);
   return changed;
 }
 
@@ -46,6 +46,7 @@ export async function floodFillPaintSession(session, point, subtract = false, {
   finalizeDelta = null,
   pushUndo = null,
   applyFillToMask = null,
+  updatePreview = null,
   refreshCandidate = null,
   getMaskBounds = null,
 } = {}) {
@@ -60,6 +61,7 @@ export async function floodFillPaintSession(session, point, subtract = false, {
   const record = recorder?.snapshotOnly === true ? null : (recorder?.record?.bind(recorder) ?? null);
   const mode = subtract === true ? "subtract" : "add";
   const result = applyFillToMask?.(session.maskData, point.x, point.y, mode, opts, { buildCandidate: false, changeRecorder: record }) ?? { changed: 0 };
+  const changedBounds = getLastChangedBounds(session.maskData);
   if (result.changed && session.sourceMaskData && session.sourceMaskData !== session.maskData) {
     applyFillToMask?.(session.sourceMaskData, point.x, point.y, mode, {
       ...opts,
@@ -69,7 +71,9 @@ export async function floodFillPaintSession(session, point, subtract = false, {
   if (!result.changed) return 0;
   pushUndo?.(session, finalizeDelta?.(recorder));
   session.clearRedo();
-  await refreshCandidate?.(session);
+  session.paintPreviewDirtyBounds = mergeMaskBounds(session.paintPreviewDirtyBounds, changedBounds, session.maskData.cols, session.maskData.rows);
+  updatePreview?.(session);
+  await refreshCandidate?.(session, { skipPreviewIfClean: true });
   debugTiming(moduleId, "paint-hsl-flood-fill", {
     mode,
     changedCells: result.changed,
@@ -89,6 +93,7 @@ export async function paintTargetShapeSession(session, point, subtract = false, 
   finalizeDelta = null,
   pushUndo = null,
   applyRegionShapeToMask = null,
+  updatePreview = null,
   refreshCandidate = null,
   getMaskBounds = null,
 } = {}) {
@@ -110,7 +115,8 @@ export async function paintTargetShapeSession(session, point, subtract = false, 
   pushUndo?.(session, finalizeDelta?.(recorder));
   session.clearRedo();
   session.paintPreviewDirtyBounds = mergeMaskBounds(session.paintPreviewDirtyBounds, changedBounds, session.maskData.cols, session.maskData.rows);
-  await refreshCandidate?.(session);
+  updatePreview?.(session);
+  await refreshCandidate?.(session, { skipPreviewIfClean: true });
   debugTiming(moduleId, "paint-region-shape", {
     mode,
     changedCells: changed,

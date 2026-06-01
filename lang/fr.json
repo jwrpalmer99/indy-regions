@@ -11,6 +11,18 @@
       "ShowPaintHelp": {
         "Name": "Afficher l'aide de peinture des régions",
         "Hint": "Affiche le court texte d'aide souris/clavier dans la boîte de dialogue de peinture."
+      },
+      "PaintGridStepDebounce": {
+        "Name": "Delai du pas de grille",
+        "Hint": "Delai en millisecondes avant de reconstruire la resolution du masque apres modification du pas de grille."
+      },
+      "PaintRangeDebounce": {
+        "Name": "Delai des curseurs de peinture",
+        "Hint": "Delai en millisecondes avant de recalculer les limites de region pendant le glissement des curseurs."
+      },
+      "PaintInputDebounce": {
+        "Name": "Delai des entrees de peinture",
+        "Hint": "Delai en millisecondes avant de recalculer les limites de region apres modification des nombres, cases ou selecteurs."
       }
     },
     "Dialog": {
@@ -41,7 +53,8 @@
         "GridStep": "Pas de grille",
         "ShrinkGrow": "Réduire / agrandir",
         "BorderSmooth": "Lissage du bord",
-        "BorderThickness": "Épaisseur du bord"
+        "BorderThickness": "Épaisseur du bord",
+        "BorderSmoothType": "Type de lissage du bord"
       },
       "Hint": {
         "PaintOpacity": "0 transparent, 1 opaque.",
@@ -53,7 +66,8 @@
         "GridStep": "1 est le plus précis; les valeurs plus hautes sont plus rapides mais plus grossières.",
         "ShrinkGrow": "Négatif réduit, positif agrandit le contour final.",
         "BorderSmooth": "0 conserve les détails; les valeurs plus hautes simplifient les bords irréguliers.",
-        "BorderThickness": "0 masque les bords en direct; les valeurs plus hautes les rendent plus visibles."
+        "BorderThickness": "0 masque les bords en direct; les valeurs plus hautes les rendent plus visibles.",
+        "BorderSmoothType": "Choisit comment la limite tracee est lissee apres le traitement du masque."
       },
       "Status": {
         "Paint": "Peignez sur le canevas pour ajouter à la région. Maj-clic gauche soustrait."
@@ -64,6 +78,11 @@
         "CreateRegion": "Créer la région",
         "UpdateRegion": "Mettre à jour la région",
         "Cancel": "Annuler"
+      },
+      "BorderSmoothType": {
+        "Catmull": "Catmull-Rom",
+        "Rounded": "Arrondi",
+        "Relaxed": "Relache"
       }
     },
     "Notifications": {

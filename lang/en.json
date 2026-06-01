@@ -11,6 +11,18 @@
       "ShowPaintHelp": {
         "Name": "Show Region Paint Help",
         "Hint": "Show the short mouse/keyboard help text in the Region Paint dialog."
+      },
+      "PaintGridStepDebounce": {
+        "Name": "Paint Grid Step Debounce",
+        "Hint": "Delay in milliseconds before rebuilding mask resolution after changing Grid Step."
+      },
+      "PaintRangeDebounce": {
+        "Name": "Paint Slider Debounce",
+        "Hint": "Delay in milliseconds before recalculating region boundaries while dragging paint dialog sliders."
+      },
+      "PaintInputDebounce": {
+        "Name": "Paint Input Debounce",
+        "Hint": "Delay in milliseconds before recalculating region boundaries after number, checkbox, or selector changes."
       }
     },
     "Dialog": {
@@ -40,8 +52,8 @@
         "FillHoles": "Fill Holes",
         "GridStep": "Grid Step",
         "ShrinkGrow": "Shrink / Grow",
-        "MaskSmooth": "Remove Boundary Noise",
         "BorderSmooth": "Border Smooth",
+        "BorderSmoothType": "Border Smooth Type",
         "BorderThickness": "Border Thickness"
       },
       "Hint": {
@@ -53,9 +65,14 @@
         "FillHoles": "Fill internal holes when calculating the final Region boundary.",
         "GridStep": "1 is most precise; higher values are faster but coarser.",
         "ShrinkGrow": "Negative shrinks, positive grows the final boundary.",
-        "MaskSmooth": "Remove small boundary noise before tracing the final boundary.",
         "BorderSmooth": "0 keeps detail; higher values simplify jagged edges.",
+        "BorderSmoothType": "Choose how the traced boundary is smoothed after mask processing.",
         "BorderThickness": "0 hides live borders; thicker values make them easier to see."
+      },
+      "BorderSmoothType": {
+        "Catmull": "Catmull-Rom",
+        "Rounded": "Rounded",
+        "Relaxed": "Relaxed"
       },
       "Status": {
         "Paint": "Paint on the canvas to add to the region. Shift-left mouse subtracts."

@@ -1,4 +1,9 @@
 import { RegionPainter } from "./region-painter.js";
+import {
+  GRID_STEP_DEBOUNCE_SETTING,
+  INPUT_DEBOUNCE_SETTING,
+  RANGE_DEBOUNCE_SETTING,
+} from "./region-painter-constants.js";
 
 const MODULE_ID = "indy-regions";
 const PAINT_REGION_TOOL_NAME = "indy-regions-paint-region";
@@ -110,6 +115,33 @@ Hooks.once("init", () => {
     config: true,
     type: Boolean,
     default: true,
+  });
+  game.settings.register(MODULE_ID, GRID_STEP_DEBOUNCE_SETTING, {
+    name: localize("Settings.PaintGridStepDebounce.Name", "Paint Grid Step Debounce"),
+    hint: localize("Settings.PaintGridStepDebounce.Hint", "Delay in milliseconds before rebuilding mask resolution after changing Grid Step."),
+    scope: "client",
+    config: true,
+    type: Number,
+    default: 180,
+    range: { min: 0, max: 2000, step: 10 },
+  });
+  game.settings.register(MODULE_ID, RANGE_DEBOUNCE_SETTING, {
+    name: localize("Settings.PaintRangeDebounce.Name", "Paint Slider Debounce"),
+    hint: localize("Settings.PaintRangeDebounce.Hint", "Delay in milliseconds before recalculating region boundaries while dragging paint dialog sliders."),
+    scope: "client",
+    config: true,
+    type: Number,
+    default: 220,
+    range: { min: 0, max: 2000, step: 10 },
+  });
+  game.settings.register(MODULE_ID, INPUT_DEBOUNCE_SETTING, {
+    name: localize("Settings.PaintInputDebounce.Name", "Paint Input Debounce"),
+    hint: localize("Settings.PaintInputDebounce.Hint", "Delay in milliseconds before recalculating region boundaries after number, checkbox, or selector changes."),
+    scope: "client",
+    config: true,
+    type: Number,
+    default: 80,
+    range: { min: 0, max: 2000, step: 10 },
   });
   RegionPainter.configure({ moduleId: MODULE_ID });
 });

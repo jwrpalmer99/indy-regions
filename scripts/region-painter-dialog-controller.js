@@ -1,10 +1,14 @@
 import {
   DEFAULT_WATER_OPTIONS,
+  GRID_STEP_DEBOUNCE_SETTING,
+  INPUT_DEBOUNCE_SETTING,
   MAX_FILL_BRIDGE_PX,
+  RANGE_DEBOUNCE_SETTING,
 } from "./region-painter-constants.js";
 import { renderPaintDialogContent } from "./region-painter-dialog.js";
 import {
   normalizeHexColor,
+  normalizeBorderSmoothType,
   normalizeHslFillBias,
   normalizeOptions,
   normalizePaintOpacity,
@@ -16,6 +20,16 @@ import {
   paintHelpDisplayStyle,
   setStoredPaintHelpOpen,
 } from "./region-painter-utils.js";
+
+function getDebounceSetting(moduleId, setting, fallback) {
+  try {
+    const value = Number(game?.settings?.get?.(moduleId, setting));
+    if (Number.isFinite(value)) return Math.max(0, Math.round(value));
+  } catch (_err) {
+    // Fall back when settings are unavailable during tests or early startup.
+  }
+  return fallback;
+}
 
 export async function renderPaintSessionDialog(session, {
   moduleId = "indy-regions",
@@ -38,6 +52,19 @@ export async function renderPaintSessionDialog(session, {
   const helpStyle = paintHelpDisplayStyle(moduleId);
   const helpOpenAttr = getStoredPaintHelpOpen(moduleId) ? " open" : "";
   const t = (key, fallback) => localizeText(moduleId, key, fallback);
+  const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;",
+  })[char]);
+  const borderSmoothType = normalizeBorderSmoothType(opts.borderSmoothType);
+  const borderSmoothTypeChoices = [
+    ["catmull", t("Dialog.BorderSmoothType.Catmull", "Catmull-Rom")],
+    ["rounded", t("Dialog.BorderSmoothType.Rounded", "Rounded")],
+    ["relaxed", t("Dialog.BorderSmoothType.Relaxed", "Relaxed")],
+  ];
   const content = await renderPaintDialogContent({
     helpOpenAttr,
     helpStyle,
@@ -66,8 +93,8 @@ export async function renderPaintSessionDialog(session, {
       fillHoles: t("Dialog.Label.FillHoles", "Fill Holes"),
       gridStep: t("Dialog.Label.GridStep", "Grid Step"),
       shrinkGrow: t("Dialog.Label.ShrinkGrow", "Shrink / Grow"),
-      maskSmooth: t("Dialog.Label.MaskSmooth", "Remove Boundary Noise"),
       borderSmooth: t("Dialog.Label.BorderSmooth", "Border Smooth"),
+      borderSmoothType: t("Dialog.Label.BorderSmoothType", "Border Smooth Type"),
       borderThickness: t("Dialog.Label.BorderThickness", "Border Thickness"),
     },
     status: {
@@ -86,8 +113,8 @@ export async function renderPaintSessionDialog(session, {
       fillHoles: t("Dialog.Hint.FillHoles", "Fill internal holes when calculating the final Region boundary."),
       gridStep: t("Dialog.Hint.GridStep", "1 is most precise; higher values are faster but coarser."),
       shrinkGrow: t("Dialog.Hint.ShrinkGrow", "Negative shrinks, positive grows the final boundary."),
-      maskSmooth: t("Dialog.Hint.MaskSmooth", "Remove small boundary noise before tracing the final boundary."),
       borderSmooth: t("Dialog.Hint.BorderSmooth", "0 keeps detail; higher values simplify jagged edges."),
+      borderSmoothType: t("Dialog.Hint.BorderSmoothType", "Choose how the traced boundary is smoothed after mask processing."),
       borderThickness: t("Dialog.Hint.BorderThickness", "0 hides live borders; thicker values make them easier to see."),
     },
     values: {
@@ -100,10 +127,13 @@ export async function renderPaintSessionDialog(session, {
       fillHoles: opts.fillHoles === true ? "checked" : "",
       gridStep: opts.gridStep,
       featherShrinkPx: opts.featherShrinkPx,
-      morphSmoothPx: opts.morphSmoothPx,
       smoothing: opts.smoothing,
+      borderSmoothType,
       paintBorderThickness: opts.paintBorderThickness,
     },
+    borderSmoothTypeOptions: borderSmoothTypeChoices
+      .map(([value, label]) => `<option value="${escapeHtml(value)}"${value === borderSmoothType ? " selected" : ""}>${escapeHtml(label)}</option>`)
+      .join(""),
   });
   if (getActiveSession?.() !== session) return;
 
@@ -197,19 +227,21 @@ export async function renderPaintSessionDialog(session, {
       if (input.name === "brushSizePx" && session.lastBrushPoint) {
         drawBrush?.(session, session.lastBrushPoint, session.paintMode ?? "add");
       }
-      if (["gridStep", "smoothing", "morphSmoothPx", "featherShrinkPx", "paintBorderThickness", "paintOpacity", "debug", "paintColor", "fillHoles"].includes(input.name)) {
+      if (["gridStep", "smoothing", "borderSmoothType", "featherShrinkPx", "paintBorderThickness", "paintOpacity", "debug", "paintColor", "fillHoles"].includes(input.name)) {
         if (input.name === "gridStep") {
           if (session.gridStepUpdateTimer) clearTimeout(session.gridStepUpdateTimer);
           session.gridStepUpdateTimer = setTimeout(() => {
             session.gridStepUpdateTimer = null;
             void resetMaskResolution?.(session);
-          }, 180);
-        } else if (["smoothing", "morphSmoothPx", "featherShrinkPx", "fillHoles"].includes(input.name)) {
+          }, getDebounceSetting(moduleId, GRID_STEP_DEBOUNCE_SETTING, 180));
+        } else if (["smoothing", "borderSmoothType", "featherShrinkPx", "fillHoles"].includes(input.name)) {
           if (session.paintOptionsUpdateTimer) clearTimeout(session.paintOptionsUpdateTimer);
           session.paintOptionsUpdateTimer = setTimeout(() => {
             session.paintOptionsUpdateTimer = null;
             void refreshCandidate?.(session);
-          }, input.type === "range" ? 220 : 80);
+          }, input.type === "range"
+            ? getDebounceSetting(moduleId, RANGE_DEBOUNCE_SETTING, 220)
+            : getDebounceSetting(moduleId, INPUT_DEBOUNCE_SETTING, 80));
         } else {
           void refreshCandidate?.(session);
         }

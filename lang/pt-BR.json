@@ -11,6 +11,18 @@
       "ShowPaintHelp": {
         "Name": "Mostrar ajuda da pintura de regiões",
         "Hint": "Mostra o texto curto de ajuda de mouse e teclado na janela de pintura de regiões."
+      },
+      "PaintGridStepDebounce": {
+        "Name": "Atraso do passo da grade",
+        "Hint": "Atraso em milissegundos antes de reconstruir a resolucao da mascara apos alterar o passo da grade."
+      },
+      "PaintRangeDebounce": {
+        "Name": "Atraso dos controles deslizantes",
+        "Hint": "Atraso em milissegundos antes de recalcular os limites da regiao ao arrastar controles deslizantes da janela de pintura."
+      },
+      "PaintInputDebounce": {
+        "Name": "Atraso das entradas de pintura",
+        "Hint": "Atraso em milissegundos antes de recalcular os limites da regiao apos alteracoes em numeros, caixas ou seletores."
       }
     },
     "Dialog": {
@@ -41,7 +53,8 @@
         "GridStep": "Passo da grade",
         "ShrinkGrow": "Reduzir / ampliar",
         "BorderSmooth": "Suavização da borda",
-        "BorderThickness": "Espessura da borda"
+        "BorderThickness": "Espessura da borda",
+        "BorderSmoothType": "Tipo de suavizacao da borda"
       },
       "Hint": {
         "PaintOpacity": "0 transparente, 1 opaco.",
@@ -53,7 +66,8 @@
         "GridStep": "1 é mais preciso; valores maiores são mais rápidos, mas mais grosseiros.",
         "ShrinkGrow": "Negativo reduz, positivo amplia o contorno final.",
         "BorderSmooth": "0 mantém detalhes; valores maiores simplificam bordas irregulares.",
-        "BorderThickness": "0 oculta bordas ao vivo; valores maiores as tornam mais visíveis."
+        "BorderThickness": "0 oculta bordas ao vivo; valores maiores as tornam mais visíveis.",
+        "BorderSmoothType": "Escolhe como o limite tracado e suavizado depois do processamento da mascara."
       },
       "Status": {
         "Paint": "Pinte no canvas para adicionar à região. Shift-botão esquerdo subtrai."
@@ -64,6 +78,11 @@
         "CreateRegion": "Criar região",
         "UpdateRegion": "Atualizar região",
         "Cancel": "Cancelar"
+      },
+      "BorderSmoothType": {
+        "Catmull": "Catmull-Rom",
+        "Rounded": "Arredondado",
+        "Relaxed": "Relaxado"
       }
     },
     "Notifications": {

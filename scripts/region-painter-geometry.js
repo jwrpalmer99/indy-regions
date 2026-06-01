@@ -50,7 +50,7 @@ export function simplifyRdpOpen(points, tolerance) {
   return simplify(0, points.length - 1);
 }
 
-export function simplifyClosedPolygon(points, tolerance) {
+export function simplifyClosedPolygonRdp(points, tolerance) {
   if (!Array.isArray(points) || points.length <= 3) return points ?? [];
   const amount = Math.max(0, Number(tolerance) || 0);
   let bestIndex = 0;
@@ -62,8 +62,24 @@ export function simplifyClosedPolygon(points, tolerance) {
   const rotated = points.slice(bestIndex).concat(points.slice(0, bestIndex));
   rotated.push(rotated[0]);
   const simplified = simplifyRdpOpen(rotated, amount).slice(0, -1);
+  return simplified.length >= 3 ? simplified : points.slice();
+}
+
+export function simplifyClosedPolygon(points, tolerance) {
+  if (!Array.isArray(points) || points.length <= 3) return points ?? [];
+  const amount = Math.max(0, Number(tolerance) || 0);
+  const simplified = simplifyClosedPolygonRdp(points, amount);
   const base = simplified.length >= 3 ? simplified : points.slice();
   return smoothClosedPolygon(base, amount);
+}
+
+export function smoothBoundaryPolygon(points, amount, type = "rounded") {
+  const smoothAmount = Math.max(0, Number(amount) || 0);
+  const smoothType = String(type ?? "rounded").trim().toLowerCase();
+  if (!Array.isArray(points) || points.length <= 3 || smoothAmount <= 0) return points?.slice?.() ?? [];
+  if (smoothType === "rounded") return roundedSmoothClosedPolygon(points, smoothAmount);
+  if (smoothType === "relaxed") return relaxedSmoothClosedPolygon(points, smoothAmount);
+  return simplifyClosedPolygon(points, smoothAmount);
 }
 
 export function limitClosedPolygonPoints(points, maxPoints = 512) {
@@ -71,6 +87,41 @@ export function limitClosedPolygonPoints(points, maxPoints = 512) {
   const stride = Math.ceil(points.length / maxPoints);
   const out = [];
   for (let i = 0; i < points.length; i += stride) out.push(points[i]);
+  return out.length >= 3 ? out : points.slice(0, maxPoints);
+}
+
+export function resampleClosedPolygon(points, maxPoints = 512) {
+  if (!Array.isArray(points) || points.length <= maxPoints) return points ?? [];
+  const lengths = [];
+  let perimeter = 0;
+  for (let i = 0; i < points.length; i += 1) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    lengths.push(length);
+    perimeter += length;
+  }
+  if (perimeter <= 0) return limitClosedPolygonPoints(points, maxPoints);
+
+  const out = [];
+  const step = perimeter / maxPoints;
+  let edgeIndex = 0;
+  let edgeStartDistance = 0;
+  for (let sample = 0; sample < maxPoints; sample += 1) {
+    const target = sample * step;
+    while (edgeIndex < lengths.length - 1 && edgeStartDistance + lengths[edgeIndex] < target) {
+      edgeStartDistance += lengths[edgeIndex];
+      edgeIndex += 1;
+    }
+    const a = points[edgeIndex];
+    const b = points[(edgeIndex + 1) % points.length];
+    const edgeLength = lengths[edgeIndex] || 1;
+    const t = Math.max(0, Math.min(1, (target - edgeStartDistance) / edgeLength));
+    out.push({
+      x: a.x + (b.x - a.x) * t,
+      y: a.y + (b.y - a.y) * t,
+    });
+  }
   return out.length >= 3 ? out : points.slice(0, maxPoints);
 }
 
@@ -114,6 +165,71 @@ export function smoothClosedPolygon(points, amount) {
     }
   }
   return limitClosedPolygonPoints(out, maxPoints);
+}
+
+export function roundedSmoothClosedPolygon(points, amount) {
+  if (!Array.isArray(points) || points.length < 3) return points ?? [];
+  const smoothAmount = Math.max(0, Number(amount) || 0);
+  if (smoothAmount <= 0) return points.slice();
+
+  let out = simplifyClosedPolygonRdp(points, smoothAmount * 0.35);
+  out = resampleClosedPolygon(out, 256);
+  const strength = Math.min(1, smoothAmount / 32);
+  const fullIterations = Math.floor(strength * 4);
+  const fractionalIteration = (strength * 4) - fullIterations;
+  const iterations = fullIterations + (fractionalIteration > 0.001 ? 1 : 0);
+  for (let iteration = 0; iteration < iterations; iteration += 1) {
+    if (out.length < 3) break;
+    const cut = iteration < fullIterations ? 0.25 : 0.25 * fractionalIteration;
+    if (cut <= 0) continue;
+    const next = [];
+    for (let i = 0; i < out.length; i += 1) {
+      const a = out[i];
+      const b = out[(i + 1) % out.length];
+      next.push({
+        x: (a.x * (1 - cut)) + (b.x * cut),
+        y: (a.y * (1 - cut)) + (b.y * cut),
+      });
+      next.push({
+        x: (a.x * cut) + (b.x * (1 - cut)),
+        y: (a.y * cut) + (b.y * (1 - cut)),
+      });
+    }
+    out = resampleClosedPolygon(next, 512);
+  }
+  return resampleClosedPolygon(out, 512);
+}
+
+export function relaxedSmoothClosedPolygon(points, amount) {
+  if (!Array.isArray(points) || points.length < 3) return points ?? [];
+  const smoothAmount = Math.max(0, Number(amount) || 0);
+  if (smoothAmount <= 0) return points.slice();
+
+  const strength = Math.min(1, smoothAmount / 32);
+  let out = simplifyClosedPolygonRdp(points, smoothAmount * 0.25);
+  if (out.length < 3) out = points.slice();
+  out = limitClosedPolygonPoints(out, 512);
+
+  const smoothPass = (source, factor) => {
+    const next = [];
+    for (let i = 0; i < source.length; i += 1) {
+      const prev = source[(i - 1 + source.length) % source.length];
+      const point = source[i];
+      const nextPoint = source[(i + 1) % source.length];
+      const lx = ((prev.x + nextPoint.x) * 0.5) - point.x;
+      const ly = ((prev.y + nextPoint.y) * 0.5) - point.y;
+      next.push({ x: point.x + lx * factor, y: point.y + ly * factor });
+    }
+    return next;
+  };
+
+  const iterations = Math.max(1, Math.min(8, Math.ceil(strength * 8)));
+  const passScale = strength / iterations;
+  for (let i = 0; i < iterations; i += 1) {
+    out = smoothPass(out, 0.5 * passScale);
+    out = smoothPass(out, -0.53 * passScale);
+  }
+  return limitClosedPolygonPoints(out, 512);
 }
 
 export function candidateShapesToRegionData(candidate) {

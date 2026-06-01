@@ -11,6 +11,18 @@
       "ShowPaintHelp": {
         "Name": "Hilfe zum Regionsmalen anzeigen",
         "Hint": "Zeigt den kurzen Maus- und Tastaturhilfetext im Dialog zum Regionsmalen."
+      },
+      "PaintGridStepDebounce": {
+        "Name": "Debounce fuer Raster-Schritt",
+        "Hint": "Verzoegerung in Millisekunden, bevor die Maskenaufloesung nach einer Aenderung des Raster-Schritts neu aufgebaut wird."
+      },
+      "PaintRangeDebounce": {
+        "Name": "Debounce fuer Mal-Schieberegler",
+        "Hint": "Verzoegerung in Millisekunden, bevor Regionsgrenzen beim Ziehen von Schiebereglern neu berechnet werden."
+      },
+      "PaintInputDebounce": {
+        "Name": "Debounce fuer Mal-Eingaben",
+        "Hint": "Verzoegerung in Millisekunden, bevor Regionsgrenzen nach Zahlen-, Kontrollkaestchen- oder Auswahl-Aenderungen neu berechnet werden."
       }
     },
     "Dialog": {
@@ -41,7 +53,8 @@
         "GridStep": "Rasterschritt",
         "ShrinkGrow": "Schrumpfen / Wachsen",
         "BorderSmooth": "Randglaettung",
-        "BorderThickness": "Randstaerke"
+        "BorderThickness": "Randstaerke",
+        "BorderSmoothType": "Randglaettungstyp"
       },
       "Hint": {
         "PaintOpacity": "0 transparent, 1 deckend.",
@@ -53,7 +66,8 @@
         "GridStep": "1 ist am genauesten; hoehere Werte sind schneller, aber grober.",
         "ShrinkGrow": "Negativ schrumpft, positiv vergroessert die finale Grenze.",
         "BorderSmooth": "0 behaelt Details; hoehere Werte vereinfachen gezackte Kanten.",
-        "BorderThickness": "0 blendet Live-Raender aus; hoehere Werte machen sie sichtbarer."
+        "BorderThickness": "0 blendet Live-Raender aus; hoehere Werte machen sie sichtbarer.",
+        "BorderSmoothType": "Waehlt, wie die nachgezeichnete Grenze nach der Maskenverarbeitung geglaettet wird."
       },
       "Status": {
         "Paint": "Male auf der Arbeitsflaeche, um die Region zu erweitern. Umschalt-linke Maustaste entfernt."
@@ -64,6 +78,11 @@
         "CreateRegion": "Region erstellen",
         "UpdateRegion": "Region aktualisieren",
         "Cancel": "Abbrechen"
+      },
+      "BorderSmoothType": {
+        "Catmull": "Catmull-Rom",
+        "Rounded": "Abgerundet",
+        "Relaxed": "Entspannt"
       }
     },
     "Notifications": {

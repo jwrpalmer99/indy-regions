@@ -8,6 +8,10 @@ export const MAX_FILL_BRIDGE_PX = 20;
 export const PAINT_REGION_DEFAULT_NAME = "Region";
 export const DEBUG_TIMINGS_SETTING = "debugTimings";
 export const SHOW_PAINT_HELP_SETTING = "showPaintHelp";
+export const GRID_STEP_DEBOUNCE_SETTING = "paintGridStepDebounceMs";
+export const RANGE_DEBOUNCE_SETTING = "paintRangeDebounceMs";
+export const INPUT_DEBOUNCE_SETTING = "paintInputDebounceMs";
+export const BORDER_SMOOTH_TYPES = Object.freeze(["catmull", "rounded", "relaxed"]);
 export const CARDINAL_DIRECTIONS = Object.freeze([
   [-1, 0],
   [1, 0],
@@ -21,7 +25,7 @@ export const DEFAULT_WATER_OPTIONS = Object.freeze({
   fillColorMode: "rgb",
   fillBridgePx: 0,
   smoothing: 2.0,
-  morphSmoothPx: 0,
+  borderSmoothType: "rounded",
   featherShrinkPx: 0,
   requireWaterLikeSeed: false,
   requireWaterLikeFill: false,

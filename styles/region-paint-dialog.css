@@ -67,6 +67,14 @@
   display: flex;
 }
 
+.indy-regions-paint-dialog .indy-select-row {
+  grid-template-columns: minmax(8rem, 12rem);
+}
+
+.indy-regions-paint-dialog select {
+  width: 100%;
+}
+
 .indy-regions-paint-dialog .indy-slider-with-end-labels {
   display: grid;
   gap: 0.05rem;
