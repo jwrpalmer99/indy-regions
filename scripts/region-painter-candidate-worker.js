@@ -37,6 +37,8 @@ function imageGridPointToScene(point, mapping) {
   };
 }
 
+let lastGeometryCache = null;
+
 function candidateFromMask(maskData, options = {}, mapping = {}) {
   const totalStart = nowMs();
   const opts = normalizeOptions(options);
@@ -44,7 +46,7 @@ function candidateFromMask(maskData, options = {}, mapping = {}) {
   const borderSmoothType = normalizeBorderSmoothType(opts.borderSmoothType);
   const fillHoles = opts.fillHoles === true;
   const { mask, cols, rows, gridStep } = maskData ?? {};
-  if (!mask || !cols || !rows || !gridStep) return { candidate: null, timing: { totalMs: 0 } };
+  if (!cols || !rows || !gridStep) return { candidate: null, timing: { totalMs: 0 } };
   const scanBounds = normalizeMaskBounds(maskData.bounds, cols, rows);
   if (!scanBounds) return { candidate: null, timing: { totalMs: 0 } };
 
@@ -52,61 +54,108 @@ function candidateFromMask(maskData, options = {}, mapping = {}) {
   let componentsMs = 0;
   let traceMs = 0;
   let simplifyMs = 0;
-  const areaStart = nowMs();
-  let area = 0;
-  for (let y = scanBounds.minY; y <= scanBounds.maxY; y += 1) {
-    const rowOffset = y * cols;
-    for (let x = scanBounds.minX; x <= scanBounds.maxX; x += 1) {
-      if (mask[rowOffset + x]) area += 1;
+  const geometryCacheHit = lastGeometryCache?.key
+    && lastGeometryCache.key === maskData.cacheKey
+    && lastGeometryCache.scanBounds?.minX === scanBounds.minX
+    && lastGeometryCache.scanBounds?.minY === scanBounds.minY
+    && lastGeometryCache.scanBounds?.maxX === scanBounds.maxX
+    && lastGeometryCache.scanBounds?.maxY === scanBounds.maxY;
+  if (!mask && !geometryCacheHit) return { candidate: null, timing: { totalMs: 0 } };
+  let geometry = geometryCacheHit ? lastGeometryCache : null;
+  let area = geometry?.area ?? 0;
+
+  if (!geometry) {
+    const areaStart = nowMs();
+    for (let y = scanBounds.minY; y <= scanBounds.maxY; y += 1) {
+      const rowOffset = y * cols;
+      for (let x = scanBounds.minX; x <= scanBounds.maxX; x += 1) {
+        if (mask[rowOffset + x]) area += 1;
+      }
     }
+    areaMs = nowMs() - areaStart;
   }
-  areaMs = nowMs() - areaStart;
   if (area < 3) return { candidate: null, timing: { areaMs: roundTimingMs(areaMs), totalMs: roundTimingMs(nowMs() - totalStart) } };
 
-  const minShapeArea = Math.max(3, Number(DEFAULT_WATER_OPTIONS.minShapeArea) || 3);
-  const componentsStart = nowMs();
-  const allComponents = findMaskComponentsScanline(mask, cols, rows, scanBounds);
-  const components = allComponents.filter((component) => component.length >= minShapeArea);
-  componentsMs = nowMs() - componentsStart;
+  if (!geometry) {
+    const minShapeArea = Math.max(3, Number(DEFAULT_WATER_OPTIONS.minShapeArea) || 3);
+    const componentsStart = nowMs();
+    const allComponents = findMaskComponentsScanline(mask, cols, rows, scanBounds);
+    const components = allComponents.filter((component) => component.length >= minShapeArea);
+    componentsMs = nowMs() - componentsStart;
+
+    const rawShapes = [];
+    let tracedBoundaryPoints = 0;
+    for (const component of components) {
+      const traceStart = nowMs();
+      const boundaryLoops = traceRunComponentBoundaries(component, cols, rows);
+      traceMs += nowMs() - traceStart;
+      const testPoint = Number.isFinite(component.minX) && Number.isFinite(component.minY)
+        ? { x: component.minX + 0.5, y: component.minY + 0.5 }
+        : null;
+      const outerIndex = Math.max(0, boundaryLoops.findIndex((loop) => pointInPolygon(testPoint, loop)));
+      for (let i = 0; i < boundaryLoops.length; i += 1) {
+        const rawBoundary = boundaryLoops[i];
+        if (!rawBoundary || rawBoundary.length < 3) continue;
+        const isHole = i !== outerIndex;
+        if (isHole && Math.abs(polygonArea(rawBoundary)) < MIN_HOLE_LOOP_AREA_CELLS) continue;
+        tracedBoundaryPoints += rawBoundary.length;
+        rawShapes.push({
+          rawBoundary,
+          area: isHole ? 0 : component.length,
+          isHole,
+        });
+      }
+    }
+    geometry = {
+      key: maskData.cacheKey ?? null,
+      scanBounds: { ...scanBounds },
+      area,
+      rawShapes,
+      allComponentCount: allComponents.length,
+      componentCount: components.length,
+      tracedBoundaryPoints,
+      areaMs,
+      componentsMs,
+      traceMs,
+      simplifyCache: new Map(),
+    };
+    lastGeometryCache = geometry;
+  }
+
+  const smoothingKey = `${borderSmoothType}:${smoothing}`;
+  let simplifiedShapes = geometry.simplifyCache?.get?.(smoothingKey) ?? null;
+  if (!simplifiedShapes) {
+    simplifiedShapes = [];
+    for (const rawShape of geometry.rawShapes) {
+      const simplifyStart = nowMs();
+      const simplified = smoothBoundaryPolygon(rawShape.rawBoundary, smoothing, borderSmoothType);
+      simplifyMs += nowMs() - simplifyStart;
+      if (simplified.length >= 3) simplifiedShapes.push({ ...rawShape, simplified });
+    }
+    geometry.simplifyCache ??= new Map();
+    geometry.simplifyCache.set(smoothingKey, simplifiedShapes);
+  }
 
   const shapes = [];
-  let tracedBoundaryPoints = 0;
   let simplifiedBoundaryPoints = 0;
-  for (const component of components) {
-    const traceStart = nowMs();
-    const boundaryLoops = traceRunComponentBoundaries(component, cols, rows);
-    traceMs += nowMs() - traceStart;
-    const testPoint = Number.isFinite(component.minX) && Number.isFinite(component.minY)
-      ? { x: component.minX + 0.5, y: component.minY + 0.5 }
-      : null;
-    const outerIndex = Math.max(0, boundaryLoops.findIndex((loop) => pointInPolygon(testPoint, loop)));
-    for (let i = 0; i < boundaryLoops.length; i += 1) {
-      const rawBoundary = boundaryLoops[i];
-      if (!rawBoundary || rawBoundary.length < 3) continue;
-      const isHole = i !== outerIndex;
-      if (fillHoles === true && isHole) continue;
-      if (isHole && Math.abs(polygonArea(rawBoundary)) < MIN_HOLE_LOOP_AREA_CELLS) continue;
-      tracedBoundaryPoints += rawBoundary.length;
-      const simplifyStart = nowMs();
-      const simplified = smoothBoundaryPolygon(rawBoundary, smoothing, borderSmoothType);
-      simplifyMs += nowMs() - simplifyStart;
-      if (simplified.length < 3) continue;
-      simplifiedBoundaryPoints += simplified.length;
-      const points = simplified.map((point) => imageGridPointToScene({
-        x: point.x + (maskData.offsetX ?? 0),
-        y: point.y + (maskData.offsetY ?? 0),
-      }, {
-        ...mapping,
-        gridStep,
-      }));
-      if (points.length < 3) continue;
-      shapes.push({
-        points,
-        area: isHole ? 0 : component.length,
-        isHole,
-        bounds: pointsBounds(points),
-      });
-    }
+  for (const simplifiedShape of simplifiedShapes) {
+    if (fillHoles === true && simplifiedShape.isHole === true) continue;
+    const simplified = simplifiedShape.simplified;
+    simplifiedBoundaryPoints += simplified.length;
+    const points = simplified.map((point) => imageGridPointToScene({
+      x: point.x + (maskData.offsetX ?? 0),
+      y: point.y + (maskData.offsetY ?? 0),
+    }, {
+      ...mapping,
+      gridStep,
+    }));
+    if (points.length < 3) continue;
+    shapes.push({
+      points,
+      area: simplifiedShape.area,
+      isHole: simplifiedShape.isHole,
+      bounds: pointsBounds(points),
+    });
   }
 
   if (!shapes.length) {
@@ -120,12 +169,13 @@ function candidateFromMask(maskData, options = {}, mapping = {}) {
         scanCells: scanBounds.width * scanBounds.height,
         scanBounds,
         filledCells: area,
-        allComponents: allComponents.length,
-        keptComponents: components.length,
+        allComponents: geometry.allComponentCount,
+        keptComponents: geometry.componentCount,
         shapes: 0,
-        areaMs: roundTimingMs(areaMs),
-        componentsMs: roundTimingMs(componentsMs),
-        traceMs: roundTimingMs(traceMs),
+        geometryCacheHit,
+        areaMs: roundTimingMs(geometry.areaMs ?? areaMs),
+        componentsMs: roundTimingMs(geometry.componentsMs ?? componentsMs),
+        traceMs: roundTimingMs(geometry.traceMs ?? traceMs),
         simplifyMs: roundTimingMs(simplifyMs),
         totalMs: roundTimingMs(nowMs() - totalStart),
       },
@@ -165,17 +215,18 @@ function candidateFromMask(maskData, options = {}, mapping = {}) {
       scanBounds,
       filledCells: area,
       fillPercent: roundTimingMs((area / Math.max(1, cols * rows)) * 100),
-      allComponents: allComponents.length,
-      keptComponents: components.length,
+      allComponents: geometry.allComponentCount,
+      keptComponents: geometry.componentCount,
       shapes: shapes.length,
-      tracedBoundaryPoints,
+      tracedBoundaryPoints: geometry.tracedBoundaryPoints,
       simplifiedBoundaryPoints,
       smoothing,
       borderSmoothType,
       fillHoles,
-      areaMs: roundTimingMs(areaMs),
-      componentsMs: roundTimingMs(componentsMs),
-      traceMs: roundTimingMs(traceMs),
+      geometryCacheHit,
+      areaMs: roundTimingMs(geometry.areaMs ?? areaMs),
+      componentsMs: roundTimingMs(geometry.componentsMs ?? componentsMs),
+      traceMs: roundTimingMs(geometry.traceMs ?? traceMs),
       simplifyMs: roundTimingMs(simplifyMs),
       totalMs: roundTimingMs(nowMs() - totalStart),
     },

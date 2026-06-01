@@ -122,7 +122,7 @@ Hooks.once("init", () => {
     scope: "client",
     config: true,
     type: Number,
-    default: 180,
+    default: 50,
     range: { min: 0, max: 2000, step: 10 },
   });
   game.settings.register(MODULE_ID, RANGE_DEBOUNCE_SETTING, {
@@ -131,7 +131,7 @@ Hooks.once("init", () => {
     scope: "client",
     config: true,
     type: Number,
-    default: 220,
+    default: 0,
     range: { min: 0, max: 2000, step: 10 },
   });
   game.settings.register(MODULE_ID, INPUT_DEBOUNCE_SETTING, {
@@ -140,7 +140,7 @@ Hooks.once("init", () => {
     scope: "client",
     config: true,
     type: Number,
-    default: 80,
+    default: 10,
     range: { min: 0, max: 2000, step: 10 },
   });
   RegionPainter.configure({ moduleId: MODULE_ID });

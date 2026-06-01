@@ -31,6 +31,26 @@ function getDebounceSetting(moduleId, setting, fallback) {
   return fallback;
 }
 
+function runCoalescedSessionTask(session, stateKey, task) {
+  if (typeof task !== "function" || session?.closed === true) return;
+  const runningKey = `${stateKey}Running`;
+  const pendingKey = `${stateKey}Pending`;
+  if (session[runningKey] === true) {
+    session[pendingKey] = true;
+    return;
+  }
+  session[runningKey] = true;
+  Promise.resolve(task())
+    .catch((err) => console.error(err))
+    .finally(() => {
+      session[runningKey] = false;
+      if (session[pendingKey] === true && session.closed !== true) {
+        session[pendingKey] = false;
+        runCoalescedSessionTask(session, stateKey, task);
+      }
+    });
+}
+
 export async function renderPaintSessionDialog(session, {
   moduleId = "indy-regions",
   getActiveSession = null,
@@ -214,6 +234,8 @@ export async function renderPaintSessionDialog(session, {
         setStoredPaintHelpOpen(moduleId, helpDetails.open === true);
       });
     }
+    const runGridStepUpdate = () => runCoalescedSessionTask(session, "gridStepUpdate", () => resetMaskResolution?.(session));
+    const runPaintOptionsUpdate = () => runCoalescedSessionTask(session, "paintOptionsUpdate", () => refreshCandidate?.(session));
     const onInput = (event) => {
       const input = event.target;
       if (!(input instanceof HTMLInputElement) && !(input instanceof HTMLSelectElement)) return;
@@ -230,18 +252,28 @@ export async function renderPaintSessionDialog(session, {
       if (["gridStep", "smoothing", "borderSmoothType", "featherShrinkPx", "paintBorderThickness", "paintOpacity", "debug", "paintColor", "fillHoles"].includes(input.name)) {
         if (input.name === "gridStep") {
           if (session.gridStepUpdateTimer) clearTimeout(session.gridStepUpdateTimer);
+          session.gridStepUpdateTimer = null;
+          if (event.type === "change") {
+            runGridStepUpdate();
+            return;
+          }
           session.gridStepUpdateTimer = setTimeout(() => {
             session.gridStepUpdateTimer = null;
-            void resetMaskResolution?.(session);
-          }, getDebounceSetting(moduleId, GRID_STEP_DEBOUNCE_SETTING, 180));
+            runGridStepUpdate();
+          }, getDebounceSetting(moduleId, GRID_STEP_DEBOUNCE_SETTING, 50));
         } else if (["smoothing", "borderSmoothType", "featherShrinkPx", "fillHoles"].includes(input.name)) {
           if (session.paintOptionsUpdateTimer) clearTimeout(session.paintOptionsUpdateTimer);
+          session.paintOptionsUpdateTimer = null;
+          if (event.type === "change") {
+            runPaintOptionsUpdate();
+            return;
+          }
           session.paintOptionsUpdateTimer = setTimeout(() => {
             session.paintOptionsUpdateTimer = null;
-            void refreshCandidate?.(session);
+            runPaintOptionsUpdate();
           }, input.type === "range"
-            ? getDebounceSetting(moduleId, RANGE_DEBOUNCE_SETTING, 220)
-            : getDebounceSetting(moduleId, INPUT_DEBOUNCE_SETTING, 80));
+            ? getDebounceSetting(moduleId, RANGE_DEBOUNCE_SETTING, 0)
+            : getDebounceSetting(moduleId, INPUT_DEBOUNCE_SETTING, 10));
         } else {
           void refreshCandidate?.(session);
         }

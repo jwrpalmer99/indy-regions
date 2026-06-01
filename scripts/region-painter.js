@@ -58,6 +58,7 @@ import {
   clearMaskDerivedState,
   getDistanceCache,
   getGeometryCache,
+  getMaskRevision,
   getMorphCache,
   getMorphTiming,
   setDistanceCache,
@@ -125,6 +126,7 @@ const painterState = new RegionPainterState();
 const CANDIDATE_WORKER_MIN_CELLS = 2_000_000;
 let candidateWorker = null;
 let candidateWorkerRequestId = 0;
+let candidateWorkerGeometryCacheKey = null;
 
 function getCandidateWorker() {
   if (candidateWorker || typeof Worker === "undefined") return candidateWorker;
@@ -156,6 +158,7 @@ function cropMaskDataForWorker(maskData) {
     offsetY: maskOffsetY(maskData) + bounds.minY,
     fullCols: maskFullCols(maskData),
     fullRows: maskFullRows(maskData),
+    cacheKey: maskData.cacheKey ?? null,
     bounds: {
       minX: 0,
       minY: 0,
@@ -167,9 +170,28 @@ function cropMaskDataForWorker(maskData) {
   };
 }
 
+function maskMetadataForWorker(maskData) {
+  const bounds = getMaskBounds(maskData);
+  if (!maskData || !bounds) return null;
+  return {
+    cols: maskData.cols,
+    rows: maskData.rows,
+    gridStep: maskData.gridStep,
+    offsetX: maskOffsetX(maskData),
+    offsetY: maskOffsetY(maskData),
+    fullCols: maskFullCols(maskData),
+    fullRows: maskFullRows(maskData),
+    cacheKey: maskData.cacheKey ?? null,
+    bounds: { ...bounds },
+  };
+}
+
 function candidateFromMaskWorker(maskData, options = {}) {
   const worker = getCandidateWorker();
-  const workerMaskData = cropMaskDataForWorker(maskData);
+  const cacheKey = maskData?.cacheKey ?? null;
+  const workerMaskData = cacheKey && cacheKey === candidateWorkerGeometryCacheKey
+    ? maskMetadataForWorker(maskData)
+    : cropMaskDataForWorker(maskData);
   if (!worker || !workerMaskData) return null;
   const requestId = ++candidateWorkerRequestId;
   const opts = normalizeOptions(options);
@@ -196,7 +218,10 @@ function candidateFromMaskWorker(maskData, options = {}) {
       if (event.data?.requestId !== requestId) return;
       cleanup();
       if (event.data?.error) reject(new Error(event.data.error));
-      else resolve(event.data);
+      else {
+        if (workerMaskData.cacheKey) candidateWorkerGeometryCacheKey = workerMaskData.cacheKey;
+        resolve(event.data);
+      }
     };
     const onError = (event) => {
       cleanup();
@@ -205,12 +230,13 @@ function candidateFromMaskWorker(maskData, options = {}) {
     worker.addEventListener("message", onMessage);
     worker.addEventListener("error", onError);
     try {
+      const transfer = workerMaskData.mask?.buffer ? [workerMaskData.mask.buffer] : [];
       worker.postMessage({
         requestId,
         maskData: workerMaskData,
         options: workerOptions,
         mapping,
-      }, [workerMaskData.mask.buffer]);
+      }, transfer);
     } catch (err) {
       cleanup();
       reject(err);
@@ -224,6 +250,7 @@ function configure({ moduleId = "indy-regions", getShaderChoices = null, syncReg
 
 function clearCache() {
   painterState.clearImageCache();
+  candidateWorkerGeometryCacheKey = null;
 }
 
 async function loadImage(src) {
@@ -591,6 +618,40 @@ function dilateMaskData(maskData, radiusCells = 0) {
     };
   }
 
+function getMaskCandidateCacheKey(maskData, morphKey = "none") {
+    const bounds = getMaskBounds(maskData);
+    return [
+      getMaskRevision(maskData),
+      morphKey,
+      maskData?.cols ?? 0,
+      maskData?.rows ?? 0,
+      maskData?.gridStep ?? 0,
+      maskOffsetX(maskData),
+      maskOffsetY(maskData),
+      maskFullCols(maskData),
+      maskFullRows(maskData),
+      bounds?.minX ?? -1,
+      bounds?.minY ?? -1,
+      bounds?.maxX ?? -1,
+      bounds?.maxY ?? -1,
+    ].join(":");
+  }
+
+function getCachedMorphMask(maskData, morphKey) {
+    const cache = getMorphCache(maskData);
+    if (cache?.entries instanceof Map) return cache.entries.get(morphKey) ?? null;
+    if (cache?.key === morphKey && cache?.maskData) return cache.maskData;
+    return null;
+  }
+
+function setCachedMorphMask(maskData, morphKey, candidateMaskData) {
+    const existing = getMorphCache(maskData);
+    const entries = existing?.entries instanceof Map ? existing.entries : new Map();
+    entries.set(morphKey, candidateMaskData);
+    if (entries.size > 16) entries.delete(entries.keys().next().value);
+    setMorphCache(maskData, { entries });
+  }
+
 function candidateFromMaskWithOptions(maskData, options = {}) {
     const totalStart = nowMs();
     const opts = normalizeOptions(options);
@@ -603,8 +664,9 @@ function candidateFromMaskWithOptions(maskData, options = {}) {
     let morphCacheHit = false;
     const morphTiming = [];
     if (radiusCells > 0) {
-      if (getMorphCache(maskData)?.key === morphKey && getMorphCache(maskData)?.maskData) {
-        candidateMaskData = getMorphCache(maskData).maskData;
+      const cachedMorph = getCachedMorphMask(maskData, morphKey);
+      if (cachedMorph) {
+        candidateMaskData = cachedMorph;
         morphCacheHit = true;
       } else {
         const passStart = nowMs();
@@ -618,9 +680,10 @@ function candidateFromMaskWithOptions(maskData, options = {}) {
           rows: candidateMaskData?.rows ?? 0,
           ms: roundTimingMs(nowMs() - passStart),
         });
-        setMorphCache(maskData, { key: morphKey, maskData: candidateMaskData });
+        setCachedMorphMask(maskData, morphKey, candidateMaskData);
       }
     }
+    if (candidateMaskData) candidateMaskData.cacheKey = getMaskCandidateCacheKey(maskData, morphKey);
     const morphMs = nowMs() - morphStart;
     const candidate = candidateFromMask(candidateMaskData, opts.smoothing, { fillHoles: opts.fillHoles, borderSmoothType: opts.borderSmoothType });
     let fallbackCandidate = null;
@@ -662,8 +725,9 @@ async function candidateFromMaskWithOptionsAsync(maskData, options = {}, { useWo
     let morphCacheHit = false;
     const morphTiming = [];
     if (radiusCells > 0) {
-      if (getMorphCache(maskData)?.key === morphKey && getMorphCache(maskData)?.maskData) {
-        candidateMaskData = getMorphCache(maskData).maskData;
+      const cachedMorph = getCachedMorphMask(maskData, morphKey);
+      if (cachedMorph) {
+        candidateMaskData = cachedMorph;
         morphCacheHit = true;
       } else {
         const passStart = nowMs();
@@ -677,9 +741,10 @@ async function candidateFromMaskWithOptionsAsync(maskData, options = {}, { useWo
           rows: candidateMaskData?.rows ?? 0,
           ms: roundTimingMs(nowMs() - passStart),
         });
-        setMorphCache(maskData, { key: morphKey, maskData: candidateMaskData });
+        setCachedMorphMask(maskData, morphKey, candidateMaskData);
       }
     }
+    if (candidateMaskData) candidateMaskData.cacheKey = getMaskCandidateCacheKey(maskData, morphKey);
     const morphMs = nowMs() - morphStart;
     const candidateCells = (candidateMaskData?.cols ?? 0) * (candidateMaskData?.rows ?? 0);
     if (useWorker === true && candidateCells >= CANDIDATE_WORKER_MIN_CELLS) {
@@ -690,6 +755,7 @@ async function candidateFromMaskWithOptionsAsync(maskData, options = {}, { useWo
         const candidate = workerResult?.candidate ?? null;
         let fallbackCandidate = null;
         if (!candidate && offsetPx < 0 && radiusCells > 0) {
+          maskData.cacheKey = getMaskCandidateCacheKey(maskData, "none");
           const fallbackResult = await candidateFromMaskWorker(maskData, opts);
           if (!fallbackResult) throw new Error("Candidate worker is not available.");
           fallbackCandidate = fallbackResult?.candidate ?? null;

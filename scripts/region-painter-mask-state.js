@@ -8,6 +8,7 @@ export function getMaskRuntimeState(maskData) {
       morphCache: null,
       geometryCache: null,
       distanceCache: null,
+      revision: 0,
       lastDistanceCacheHit: false,
       lastMorphFastPath: false,
       lastChangedBounds: null,
@@ -23,6 +24,11 @@ export function clearMaskDerivedState(maskData) {
   state.morphCache = null;
   state.geometryCache = null;
   state.distanceCache = null;
+  state.revision = (state.revision ?? 0) + 1;
+}
+
+export function getMaskRevision(maskData) {
+  return getMaskRuntimeState(maskData)?.revision ?? 0;
 }
 
 export function getMorphCache(maskData) {
