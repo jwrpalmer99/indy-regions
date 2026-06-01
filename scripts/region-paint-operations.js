@@ -57,7 +57,7 @@ export async function floodFillPaintSession(session, point, subtract = false, {
     requireWaterLikeFill: false,
   };
   const recorder = createDeltaRecorder?.(session);
-  const record = recorder?.record?.bind(recorder) ?? null;
+  const record = recorder?.snapshotOnly === true ? null : (recorder?.record?.bind(recorder) ?? null);
   const mode = subtract === true ? "subtract" : "add";
   const result = applyFillToMask?.(session.maskData, point.x, point.y, mode, opts, { buildCandidate: false, changeRecorder: record }) ?? { changed: 0 };
   if (result.changed && session.sourceMaskData && session.sourceMaskData !== session.maskData) {

@@ -1,4 +1,4 @@
-const MAX_DELTA_CELLS = 750_000;
+const MAX_DELTA_CELLS = 100_000;
 
 export function maskDeltaMetadata(maskData) {
   if (!maskData?.mask) return null;
@@ -33,9 +33,22 @@ export function snapshotMaskBeforeDelta(maskData, delta) {
   return { ...meta, mask };
 }
 
-export function createPaintDeltaRecorder(session) {
+export function createPaintDeltaRecorder(session, {
+  preferSnapshot = false,
+} = {}) {
   const maskData = session?.maskData ?? null;
   const sourceMaskData = session?.sourceMaskData ?? maskData;
+  if (preferSnapshot === true) {
+    return {
+      type: "snapshot",
+      snapshotOnly: true,
+      maskSnapshot: snapshotMaskBeforeDelta(maskData, null),
+      sourceMaskSnapshot: sourceMaskData && sourceMaskData !== maskData
+        ? snapshotMaskBeforeDelta(sourceMaskData, null)
+        : snapshotMaskBeforeDelta(maskData, null),
+      record() {},
+    };
+  }
   const maskDelta = createMaskDelta(maskData);
   const sourceDelta = sourceMaskData && sourceMaskData !== maskData
     ? createMaskDelta(sourceMaskData)
@@ -99,6 +112,13 @@ export function finalizeMaskDelta(delta) {
 }
 
 export function finalizePaintDelta(recorder) {
+  if (recorder?.type === "snapshot") {
+    if (!recorder.maskSnapshot) return null;
+    return {
+      maskData: recorder.maskSnapshot,
+      sourceMaskData: recorder.sourceMaskSnapshot ?? recorder.maskSnapshot,
+    };
+  }
   if (recorder?.type !== "delta") return null;
   if (recorder.maskSnapshot || recorder.sourceMaskSnapshot) {
     const maskData = recorder.maskSnapshot ?? snapshotMaskBeforeDelta(recorder.currentMaskData, recorder.maskData);

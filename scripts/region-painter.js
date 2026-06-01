@@ -200,8 +200,8 @@ function invalidateMaskDerivedData(maskData, { boundsDirty = false } = {}) {
     if (boundsDirty === true) maskData.boundsDirty = true;
   }
 
-function createPaintDeltaRecorder(session) {
-    return createPaintDeltaRecorderForSession(session);
+function createPaintDeltaRecorder(session, options = {}) {
+    return createPaintDeltaRecorderForSession(session, options);
   }
 
 function finalizePaintDelta(recorder) {
@@ -881,6 +881,9 @@ function applySparseFloodFillToMask(maskData, sceneX, sceneY, mode = "add", opti
       ? "hsl"
       : "rgb";
     const seedHsl = fillColorMode === "hsl" ? rgb255ToHsl(seedR, seedG, seedB) : null;
+    const seedHue = seedHsl?.h ?? 0;
+    const seedSaturation = seedHsl?.s ?? 0;
+    const seedLightness = seedHsl?.l ?? 0;
     const hslBias = normalizeHslFillBias(opts.hslFillBias);
     const hueWeight = Math.pow(2, hslBias);
     const lightnessWeight = Math.pow(2, -hslBias);
@@ -920,11 +923,25 @@ function applySparseFloodFillToMask(maskData, sceneX, sceneY, mode = "add", opti
       const idx = (py * imgW + px) * 4;
       let matches = true;
       if (fillColorMode === "hsl") {
-        const hsl = rgb255ToHsl(pixels[idx], pixels[idx + 1], pixels[idx + 2]);
-        const dhRaw = Math.abs(hsl.h - seedHsl.h);
+        const r = pixels[idx] / 255;
+        const g = pixels[idx + 1] / 255;
+        const b = pixels[idx + 2] / 255;
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        const l = (max + min) * 0.5;
+        let h = 0;
+        let s = 0;
+        if (max !== min) {
+          const d = max - min;
+          s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+          if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+          else if (max === g) h = ((b - r) / d + 2) / 6;
+          else h = ((r - g) / d + 4) / 6;
+        }
+        const dhRaw = Math.abs(h - seedHue);
         const dh = Math.min(dhRaw, 1 - dhRaw) * 255;
-        const ds = (hsl.s - seedHsl.s) * 255;
-        const dl = (hsl.l - seedHsl.l) * 255;
+        const ds = (s - seedSaturation) * 255;
+        const dl = (l - seedLightness) * 255;
         matches = ((dh * dh * hueWeight) + (ds * ds) + (dl * dl * lightnessWeight)) <= tolSq;
       } else {
         const dr = pixels[idx] - seedR;
@@ -1017,6 +1034,99 @@ function applySparseFloodFillToMask(maskData, sceneX, sceneY, mode = "add", opti
       stackX.push(gx);
       stackY.push(gy);
     };
+
+    if (bridgeCells <= 0) {
+      const isVisitedIndex = (idx) => {
+        if (visitedBits) return (visitedBits[idx >> 3] & (1 << (idx & 7))) !== 0;
+        return visitedSet.has(idx);
+      };
+      const markVisitedIndex = (idx) => {
+        if (visitedBits) visitedBits[idx >> 3] |= 1 << (idx & 7);
+        else visitedSet.add(idx);
+      };
+      const maybePushSeed = (gx, gy) => {
+        if (gx < 0 || gx >= cols || gy < 0 || gy >= rows) return;
+        const idx = gy * cols + gx;
+        if (isVisitedIndex(idx)) return;
+        markVisitedIndex(idx);
+        stackX.push(gx);
+        stackY.push(gy);
+      };
+      const pushNeighborRuns = (ny, leftX, rightX) => {
+        let x = leftX;
+        while (x <= rightX) {
+          const idx = ny * cols + x;
+          if (isVisitedIndex(idx) || !colorMatches(x, ny)) {
+            x += 1;
+            continue;
+          }
+          maybePushSeed(x, ny);
+          x += 1;
+          while (x <= rightX) {
+            const nextIdx = ny * cols + x;
+            if (isVisitedIndex(nextIdx) || !colorMatches(x, ny)) break;
+            x += 1;
+          }
+        }
+      };
+
+      while (stackX.length) {
+        const seedX = stackX.pop();
+        const y = stackY.pop();
+        let left = seedX;
+        let right = seedX;
+        let idx = y * cols + left;
+        visited += 1;
+        if (!colorMatches(left, y)) continue;
+
+        while (left > 0) {
+          const nextX = left - 1;
+          const nextIdx = idx - 1;
+          if (isVisitedIndex(nextIdx)) break;
+          markVisitedIndex(nextIdx);
+          visited += 1;
+          if (!colorMatches(nextX, y)) break;
+          left = nextX;
+          idx = nextIdx;
+        }
+
+        idx = y * cols + right;
+        while (right < cols - 1) {
+          const nextX = right + 1;
+          const nextIdx = idx + 1;
+          if (isVisitedIndex(nextIdx)) break;
+          markVisitedIndex(nextIdx);
+          visited += 1;
+          if (!colorMatches(nextX, y)) break;
+          right = nextX;
+          idx = nextIdx;
+        }
+
+        for (let x = left; x <= right; x += 1) applyCell(x, y);
+
+        if (y > 0) pushNeighborRuns(y - 1, left, right);
+        if (y < rows - 1) pushNeighborRuns(y + 1, left, right);
+      }
+
+      if (changed > 0) {
+        setLastChangedBounds(maskData, normalizeMaskBounds({
+          minX: changedMinX,
+          minY: changedMinY,
+          maxX: changedMaxX,
+          maxY: changedMaxY,
+        }, cols, rows));
+        if (op === "subtract" || op === "remove") {
+          invalidateMaskDerivedData(maskData, { boundsDirty: true });
+        } else {
+          maskData.bounds = expandMaskBounds(maskData.bounds, changedMinX, changedMinY, cols, rows);
+          maskData.bounds = expandMaskBounds(maskData.bounds, changedMaxX, changedMaxY, cols, rows);
+          maskData.boundsDirty = false;
+          invalidateMaskDerivedData(maskData);
+        }
+      }
+
+      return { changed, visited };
+    }
 
     while (stackX.length) {
       const x = stackX.pop();
@@ -1346,7 +1456,7 @@ function paintOperationCallbacks() {
       stampBrushOnMask: (maskData, x, y, mode, options, recorder) => stampBrushOnMask(maskData, x, y, mode, options, recorder),
       schedulePreviewUpdate: (paintSession) => schedulePaintPreviewUpdate(paintSession),
       refreshCandidate: (paintSession) => refreshPaintCandidate(paintSession),
-      createDeltaRecorder: (paintSession) => createPaintDeltaRecorder(paintSession),
+      createDeltaRecorder: (paintSession, options) => createPaintDeltaRecorder(paintSession, options),
       finalizeDelta: (recorder) => finalizePaintDelta(recorder),
       pushUndo: (paintSession, snapshot) => pushPaintUndoSnapshot(paintSession, snapshot),
       applyFillToMask: (maskData, x, y, mode, options, fillOptions) => applyFillToMask(maskData, x, y, mode, options, fillOptions),
