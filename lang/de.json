@@ -34,6 +34,8 @@
         "BrushSize": "Pinselgroesse",
         "FillTolerance": "Fuelltoleranz",
         "HslFillBias": "HSL-Fuellgewichtung",
+        "Hue": "Farbton",
+        "Lightness": "Helligkeit",
         "FillBridge": "Fuellbruecke",
         "GridStep": "Rasterschritt",
         "ShrinkGrow": "Schrumpfen / Wachsen",

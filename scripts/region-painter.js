@@ -96,6 +96,7 @@ import {
   maskFromRegionShapes as rasterMaskFromRegionShapes,
 } from "./region-painter-raster.js";
 import {
+  buildPaintRegionDocumentAppearance,
   findTargetRegionShapeAtPoint as findTargetRegionShapeAtPointInSources,
   loadPaintMaskFlag as loadPaintMaskFlagFromRegion,
   savePaintMaskFlag as savePaintMaskFlagToRegion,
@@ -1067,7 +1068,7 @@ function fillMaskAlpha(maskData, alpha = 255) {
   }
 
 function savePaintMaskFlag(region, session, options = {}) {
-    savePaintMaskFlagToRegion(region, session, {
+    return savePaintMaskFlagToRegion(region, session, {
       moduleId: painterState.moduleId,
       getMaskBounds: (data) => getMaskBounds(data),
       options,
@@ -1452,9 +1453,12 @@ async function renderPaintSessionDialog(session) {
       updateStatus: (paintSession) => updatePaintSessionStatus(paintSession),
       undo: (paintSession) => undoPaintSession(paintSession),
       redo: (paintSession) => redoPaintSession(paintSession),
-      saveMaskFlag: (region, paintSession, options) => savePaintMaskFlag(region, paintSession, options),
+      saveMaskFlag: async (region, paintSession, options) => {
+        await savePaintMaskFlag(region, paintSession, options);
+      },
       endSession: (options) => endSession(options),
       candidateShapesToRegionData,
+      buildDocumentAppearance: (options) => buildPaintRegionDocumentAppearance(options),
       paintRegionDefaultName: PAINT_REGION_DEFAULT_NAME,
     });
   }

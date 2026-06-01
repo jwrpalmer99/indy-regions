@@ -34,6 +34,8 @@
         "BrushSize": "Tamanho do pincel",
         "FillTolerance": "Tolerância de preenchimento",
         "HslFillBias": "Viés de preenchimento HSL",
+        "Hue": "Matiz",
+        "Lightness": "Luminosidade",
         "FillBridge": "Ponte de preenchimento",
         "GridStep": "Passo da grade",
         "ShrinkGrow": "Reduzir / ampliar",

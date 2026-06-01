@@ -30,6 +30,7 @@ export async function renderPaintSessionDialog(session, {
   saveMaskFlag = null,
   endSession = null,
   candidateShapesToRegionData = null,
+  buildDocumentAppearance = null,
   paintRegionDefaultName = "Painted Region",
 } = {}) {
   const opts = normalizeOptions(session.options);
@@ -59,6 +60,8 @@ export async function renderPaintSessionDialog(session, {
       brushSize: t("Dialog.Label.BrushSize", "Brush Size"),
       fillTolerance: t("Dialog.Label.FillTolerance", "Fill Tolerance"),
       hslFillBias: t("Dialog.Label.HslFillBias", "HSL Fill Bias"),
+      hue: t("Dialog.Label.Hue", "Hue"),
+      lightness: t("Dialog.Label.Lightness", "Lightness"),
       fillBridge: t("Dialog.Label.FillBridge", "Fill Bridge"),
       gridStep: t("Dialog.Label.GridStep", "Grid Step"),
       shrinkGrow: t("Dialog.Label.ShrinkGrow", "Shrink / Grow"),
@@ -128,11 +131,16 @@ export async function renderPaintSessionDialog(session, {
             const scene = canvas?.scene ?? null;
             const created = await scene?.createEmbeddedDocuments?.("Region", [{
               name: paintRegionDefaultName,
+              ...(buildDocumentAppearance?.(nextOptions) ?? {
+                color: normalizeHexColor(nextOptions.paintColor, DEFAULT_WATER_OPTIONS.paintColor),
+              }),
               shapes,
             }]);
             region = created?.[0] ?? null;
           }
-          if (region) saveMaskFlag?.(region, session, nextOptions);
+          if (region) {
+            await saveMaskFlag?.(region, session, nextOptions);
+          }
           endSession?.({ keepRegion: true });
           return true;
         },

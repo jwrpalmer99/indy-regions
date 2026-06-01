@@ -34,6 +34,8 @@
         "BrushSize": "브러시 크기",
         "FillTolerance": "채우기 허용치",
         "HslFillBias": "HSL 채우기 편향",
+        "Hue": "??",
+        "Lightness": "??",
         "FillBridge": "채우기 연결",
         "GridStep": "그리드 단계",
         "ShrinkGrow": "축소 / 확장",

@@ -25,12 +25,18 @@ import {
 } from "./region-painter-options.js";
 import { toFiniteNumber } from "./region-painter-utils.js";
 
+export function buildPaintRegionDocumentAppearance(options = {}) {
+  return {
+    color: normalizeHexColor(options.paintColor, DEFAULT_WATER_OPTIONS.paintColor),
+  };
+}
+
 export function savePaintMaskFlag(region, session, {
   moduleId = "indy-regions",
   getMaskBounds = null,
   options = {},
 } = {}) {
-  if (!region?.setFlag || !session?.maskData?.mask) return;
+  if (!region?.setFlag || !session?.maskData?.mask) return null;
   const { mask, cols, rows, gridStep } = session.maskData;
   const fullCols = maskFullCols(session.maskData);
   const fullRows = maskFullRows(session.maskData);
@@ -55,7 +61,7 @@ export function savePaintMaskFlag(region, session, {
       }
     }
   }
-  void region.setFlag(moduleId, PAINT_MASK_FLAG, {
+  const flagData = {
     version: 2,
     format: "cropped-alpha",
     cols: fullCols,
@@ -68,7 +74,8 @@ export function savePaintMaskFlag(region, session, {
     cropRows,
     color: normalizeHexColor(options.paintColor, DEFAULT_WATER_OPTIONS.paintColor),
     alpha: bytesToBase64(alpha),
-  });
+  };
+  return region.setFlag(moduleId, PAINT_MASK_FLAG, flagData);
 }
 
 export function loadPaintMaskFlag(region, {

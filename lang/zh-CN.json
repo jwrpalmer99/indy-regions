@@ -34,6 +34,8 @@
         "BrushSize": "画笔大小",
         "FillTolerance": "填充容差",
         "HslFillBias": "HSL 填充偏向",
+        "Hue": "??",
+        "Lightness": "??",
         "FillBridge": "填充连接",
         "GridStep": "网格步长",
         "ShrinkGrow": "收缩 / 扩张",

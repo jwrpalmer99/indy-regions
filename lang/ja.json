@@ -34,6 +34,8 @@
         "BrushSize": "ブラシサイズ",
         "FillTolerance": "塗りつぶし許容値",
         "HslFillBias": "HSL塗りつぶしバイアス",
+        "Hue": "??",
+        "Lightness": "??",
         "FillBridge": "塗りつぶしブリッジ",
         "GridStep": "グリッド間隔",
         "ShrinkGrow": "縮小 / 拡張",

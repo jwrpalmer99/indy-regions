@@ -34,6 +34,8 @@
         "BrushSize": "Brush Size",
         "FillTolerance": "Fill Tolerance",
         "HslFillBias": "HSL Fill Bias",
+        "Hue": "Hue",
+        "Lightness": "Lightness",
         "FillBridge": "Fill Bridge",
         "GridStep": "Grid Step",
         "ShrinkGrow": "Shrink / Grow",
