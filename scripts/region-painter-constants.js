@@ -31,4 +31,5 @@ export const DEFAULT_WATER_OPTIONS = Object.freeze({
   paintOpacity: 0.65,
   hslFillBias: 0,
   paintBorderThickness: 2,
+  fillHoles: false,
 });

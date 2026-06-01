@@ -517,10 +517,10 @@ function candidateFromMaskWithOptions(maskData, options = {}) {
       }
     }
     const morphMs = nowMs() - morphStart;
-    const candidate = candidateFromMask(candidateMaskData, opts.smoothing);
+    const candidate = candidateFromMask(candidateMaskData, opts.smoothing, { fillHoles: opts.fillHoles });
     let fallbackCandidate = null;
     if (!candidate && offsetPx < 0 && radiusCells > 0) {
-      fallbackCandidate = candidateFromMask(maskData, opts.smoothing);
+      fallbackCandidate = candidateFromMask(maskData, opts.smoothing, { fillHoles: opts.fillHoles });
     }
     const result = candidate ?? fallbackCandidate;
     debugTiming(painterState.moduleId, "candidate-with-options", {
@@ -538,11 +538,12 @@ function candidateFromMaskWithOptions(maskData, options = {}) {
       totalMs: roundTimingMs(nowMs() - totalStart),
       hadCandidate: Boolean(result),
       usedFallback: Boolean(!candidate && fallbackCandidate),
+      fillHoles: opts.fillHoles === true,
     });
     return result;
   }
 
-function candidateFromMask(maskData, smoothing = DEFAULT_WATER_OPTIONS.smoothing) {
+function candidateFromMask(maskData, smoothing = DEFAULT_WATER_OPTIONS.smoothing, { fillHoles = false } = {}) {
     const totalStart = nowMs();
     const { mask, cols, rows, gridStep } = maskData ?? {};
     if (!mask || !cols || !rows || !gridStep) return null;
@@ -650,6 +651,7 @@ function candidateFromMask(maskData, smoothing = DEFAULT_WATER_OPTIONS.smoothing
     }
 
     for (const simplifiedShape of simplifiedShapes) {
+      if (fillHoles === true && simplifiedShape.isHole === true) continue;
       const simplified = simplifiedShape.simplified;
       simplifiedBoundaryPoints += simplified.length;
       const points = simplified.map((point) =>
@@ -683,6 +685,7 @@ function candidateFromMask(maskData, smoothing = DEFAULT_WATER_OPTIONS.smoothing
         boundsMs: roundTimingMs(geometry.boundsMs ?? boundsMs),
         traceMs: roundTimingMs(geometry.traceMs ?? traceMs),
         simplifyMs: roundTimingMs(simplifyMs),
+        fillHoles: fillHoles === true,
         totalMs: roundTimingMs(nowMs() - totalStart),
       });
       return null;
@@ -728,6 +731,7 @@ function candidateFromMask(maskData, smoothing = DEFAULT_WATER_OPTIONS.smoothing
       tracedBoundaryPoints: geometry.tracedBoundaryPoints,
       simplifiedBoundaryPoints,
       smoothing,
+      fillHoles: fillHoles === true,
       geometryCacheHit: geometryCache === geometry,
       areaMs: roundTimingMs(geometry.areaMs ?? areaMs),
       componentsMs: roundTimingMs(geometry.componentsMs ?? componentsMs),
@@ -1187,6 +1191,8 @@ function readPaintSessionOptions(session) {
       const debugInput = root.querySelector('[name="debug"]');
       if (debugInput instanceof HTMLInputElement) opts.debug = debugInput.checked === true;
       if (session?.isPaintSession === true) opts.debug = true;
+      const fillHolesInput = root.querySelector('[name="fillHoles"]');
+      if (fillHolesInput instanceof HTMLInputElement) opts.fillHoles = fillHolesInput.checked === true;
       const colorInput = root.querySelector('[name="paintColor"]');
       if (colorInput instanceof HTMLInputElement) {
         opts.paintColor = normalizeHexColor(colorInput.value, getStoredPaintColor(painterState.moduleId));
@@ -1234,6 +1240,8 @@ function syncDialogInputsFromOptions(session) {
         if (input instanceof HTMLInputElement) input.value = String(value);
       }
     }
+    const fillHolesInput = root.querySelector('[name="fillHoles"]');
+    if (fillHolesInput instanceof HTMLInputElement) fillHolesInput.checked = opts.fillHoles === true;
   }
 
 function drawSessionDebug(session) {

@@ -19,6 +19,7 @@ Indy Regions is a Foundry VTT module for painting and editing Region shapes on t
 - Alt-click fill from an existing Region shape
 - Shift-Alt-click erase from an existing Region shape
 - Smoothing and shrink/grow controls for final Region boundaries
+- Optional filling of internal holes during final Region boundary calculation
 - Localized UI strings for common languages
 
 ## Basic Usage
@@ -53,6 +54,7 @@ To edit an existing Region, select exactly one Region first, then click **Paint 
 | Fill Tolerance | How broadly flood fill accepts similar colors |
 | HSL Fill Bias | Bias flood fill matching toward lightness or hue |
 | Fill Bridge | Allows flood fill to cross small gaps |
+| Fill Holes | Fills internal holes when calculating the final Region boundary |
 | Grid Step | Mask resolution; lower is more precise, higher is faster |
 | Shrink / Grow | Contracts or expands the final boundary |
 | Border Smooth | Simplifies jagged final boundaries |

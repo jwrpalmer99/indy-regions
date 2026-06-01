@@ -12,6 +12,7 @@
   "manifest": "#{MANIFEST}#",
   "download": "#{DOWNLOAD}#",
   "socket": true,
+  "styles": ["styles/region-paint-dialog.css"],
   "languages": [
     {
       "lang": "en",

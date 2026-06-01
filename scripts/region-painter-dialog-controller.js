@@ -63,6 +63,7 @@ export async function renderPaintSessionDialog(session, {
       hue: t("Dialog.Label.Hue", "Hue"),
       lightness: t("Dialog.Label.Lightness", "Lightness"),
       fillBridge: t("Dialog.Label.FillBridge", "Fill Bridge"),
+      fillHoles: t("Dialog.Label.FillHoles", "Fill Holes"),
       gridStep: t("Dialog.Label.GridStep", "Grid Step"),
       shrinkGrow: t("Dialog.Label.ShrinkGrow", "Shrink / Grow"),
       borderSmooth: t("Dialog.Label.BorderSmooth", "Border Smooth"),
@@ -81,6 +82,7 @@ export async function renderPaintSessionDialog(session, {
       fillTolerance: t("Dialog.Hint.FillTolerance", "Lower is stricter, higher fills more similar colours."),
       hslFillBias: t("Dialog.Hint.HslFillBias", "-1 favors lightness, 0 balanced, 1 favors hue."),
       fillBridge: t("Dialog.Hint.FillBridge", "0 is strict; higher values cross small gaps."),
+      fillHoles: t("Dialog.Hint.FillHoles", "Fill internal holes when calculating the final Region boundary."),
       gridStep: t("Dialog.Hint.GridStep", "1 is most precise; higher values are faster but coarser."),
       shrinkGrow: t("Dialog.Hint.ShrinkGrow", "Negative shrinks, positive grows the final boundary."),
       borderSmooth: t("Dialog.Hint.BorderSmooth", "0 keeps detail; higher values simplify jagged edges."),
@@ -93,6 +95,7 @@ export async function renderPaintSessionDialog(session, {
       tolerance: opts.tolerance,
       hslFillBias: normalizeHslFillBias(opts.hslFillBias),
       fillBridgePx: opts.fillBridgePx,
+      fillHoles: opts.fillHoles === true ? "checked" : "",
       gridStep: opts.gridStep,
       featherShrinkPx: opts.featherShrinkPx,
       smoothing: opts.smoothing,
@@ -102,6 +105,7 @@ export async function renderPaintSessionDialog(session, {
   if (getActiveSession?.() !== session) return;
 
   const dialog = new foundry.applications.api.DialogV2({
+    classes: ["indy-regions-paint-window"],
     window: {
       title: t("Dialog.Title.PaintRegion", "Paint Region"),
       icon: "fas fa-paintbrush",
@@ -169,7 +173,7 @@ export async function renderPaintSessionDialog(session, {
     const root = dialog.element instanceof Element
       ? dialog.element
       : (dialog.element?.[0] instanceof Element ? dialog.element[0] : null);
-    session.root = root?.querySelector?.(".indy-regions-water-region-tool") ?? root;
+    session.root = root?.querySelector?.(".indy-regions-paint-dialog") ?? root;
     if (!session.root) return;
     const helpDetails = session.root.querySelector("[data-paint-help]");
     if (helpDetails instanceof HTMLDetailsElement) {
@@ -182,13 +186,15 @@ export async function renderPaintSessionDialog(session, {
       if (!(input instanceof HTMLInputElement) && !(input instanceof HTMLSelectElement)) return;
       const peers = session.root.querySelectorAll(`[name="${input.name}"]`);
       for (const peer of peers) {
-        if (peer !== input && (peer instanceof HTMLInputElement || peer instanceof HTMLSelectElement)) peer.value = input.value;
+        if (peer === input || (!(peer instanceof HTMLInputElement) && !(peer instanceof HTMLSelectElement))) continue;
+        if (peer instanceof HTMLInputElement && peer.type === "checkbox" && input instanceof HTMLInputElement) peer.checked = input.checked;
+        else peer.value = input.value;
       }
       readOptions?.(session);
       if (input.name === "brushSizePx" && session.lastBrushPoint) {
         drawBrush?.(session, session.lastBrushPoint, session.paintMode ?? "add");
       }
-      if (["gridStep", "smoothing", "featherShrinkPx", "paintBorderThickness", "paintOpacity", "debug", "paintColor"].includes(input.name)) {
+      if (["gridStep", "smoothing", "featherShrinkPx", "paintBorderThickness", "paintOpacity", "debug", "paintColor", "fillHoles"].includes(input.name)) {
         if (input.name === "gridStep") {
           if (session.gridStepUpdateTimer) clearTimeout(session.gridStepUpdateTimer);
           session.gridStepUpdateTimer = setTimeout(() => {

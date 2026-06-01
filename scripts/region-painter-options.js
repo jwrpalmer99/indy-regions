@@ -30,6 +30,7 @@ export function normalizeOptions(options = {}) {
     ...(options && typeof options === "object" ? options : {}),
   };
   merged.fillBridgePx = clamp(toFiniteNumber(merged.fillBridgePx, DEFAULT_WATER_OPTIONS.fillBridgePx), 0, MAX_FILL_BRIDGE_PX);
+  merged.fillHoles = merged.fillHoles === true;
   return merged;
 }
 
@@ -125,6 +126,7 @@ export function setStoredPaintOptions(moduleId, options = {}) {
       paintOpacity: normalizePaintOpacity(options.paintOpacity),
       hslFillBias: normalizeHslFillBias(options.hslFillBias),
       paintBorderThickness: clamp(toFiniteNumber(options.paintBorderThickness, DEFAULT_WATER_OPTIONS.paintBorderThickness), 0, 4),
+      fillHoles: options.fillHoles === true,
     };
     globalThis.localStorage?.setItem?.(`${moduleId}.paintRegionOptions`, JSON.stringify(stored));
     setStoredPaintColor(moduleId, stored.paintColor);

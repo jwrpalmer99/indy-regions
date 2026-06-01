@@ -1,0 +1,81 @@
+.indy-regions-paint-window .window-content,
+.indy-regions-paint-window .dialog-content {
+  max-width: 100%;
+}
+
+.indy-regions-paint-dialog {
+  align-items: center;
+  display: grid;
+  gap: 0.25rem 0.6rem;
+  grid-template-columns: max-content minmax(14rem, 1fr);
+}
+
+.indy-regions-paint-dialog .indy-form-row {
+  display: contents;
+}
+
+.indy-regions-paint-dialog .indy-form-row.indy-full-row {
+  display: block;
+  grid-column: 1 / -1;
+}
+
+.indy-regions-paint-dialog label {
+  align-self: center;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.indy-regions-paint-dialog .indy-help-body {
+  line-height: 1.35;
+  margin-top: 0.35rem;
+  opacity: 0.68;
+}
+
+.indy-regions-paint-dialog .indy-form-fields {
+  align-items: center;
+  display: grid;
+  gap: 0.35rem;
+  grid-template-columns: minmax(8rem, 12rem) 4.75rem;
+  justify-content: start;
+  margin: 0;
+}
+
+.indy-regions-paint-dialog input[type="range"] {
+  width: 100%;
+}
+
+.indy-regions-paint-dialog input[type="number"] {
+  min-width: 0;
+  width: 4.75rem;
+}
+
+.indy-regions-paint-dialog input[type="color"] {
+  width: 4.75rem;
+}
+
+.indy-regions-paint-dialog .indy-full-row {
+  grid-column: 1 / -1;
+}
+
+.indy-regions-paint-dialog .indy-history-row {
+  display: flex;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+
+.indy-regions-paint-dialog .indy-checkbox-row {
+  display: flex;
+}
+
+.indy-regions-paint-dialog .indy-slider-with-end-labels {
+  display: grid;
+  gap: 0.05rem;
+}
+
+.indy-regions-paint-dialog .indy-slider-end-labels {
+  display: flex;
+  font-size: 0.58rem;
+  justify-content: space-between;
+  line-height: 1;
+  opacity: 0.65;
+}
