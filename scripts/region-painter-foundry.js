@@ -4,12 +4,60 @@ import {
 } from "./region-painter-constants.js";
 import { toFiniteNumber } from "./region-painter-utils.js";
 
+function readTextureSrc(texture) {
+  if (!texture) return "";
+  if (typeof texture === "string") return texture.trim();
+  const direct = String(texture.src ?? texture.source ?? texture.path ?? "").trim();
+  if (direct) return direct;
+  if (Array.isArray(texture)) {
+    for (const entry of texture) {
+      const src = readTextureSrc(entry);
+      if (src) return src;
+    }
+    return "";
+  }
+  if (typeof texture === "object") {
+    for (const key of ["background", "base", "primary", "texture", "image"]) {
+      const src = readTextureSrc(texture[key]);
+      if (src) return src;
+    }
+  }
+  return "";
+}
+
+function getSceneLevels(scene) {
+  if (!scene) return [];
+  const levels = collectionToArray(scene.levels);
+  if (levels.length) return levels;
+  try {
+    return collectionToArray(scene.getEmbeddedCollection?.("Level"));
+  } catch (_err) {
+    return [];
+  }
+}
+
+function getViewedSceneLevel(scene) {
+  const levels = getSceneLevels(scene);
+  return levels.find((level) => level?.isView === true)
+    ?? levels.find((level) => level?.isVisible === true)
+    ?? scene?.initialLevel
+    ?? scene?.firstLevel
+    ?? levels[0]
+    ?? null;
+}
+
 export function getSceneBackgroundPath(scene) {
+  const level = getViewedSceneLevel(scene);
+  const levelPath = readTextureSrc(level?.background) || readTextureSrc(level?.textures);
+  if (levelPath) return levelPath;
+
+  const source = scene?._source ?? {};
+  const sourcePath = readTextureSrc(source.background) || readTextureSrc(source.textures) || String(source.img ?? "").trim();
+  if (sourcePath) return sourcePath;
+
   return String(
-    scene?.background?.src ??
-      scene?.background?.source ??
-      scene?.img ??
-      "",
+    scene?.img ??
+    "",
   ).trim();
 }
 

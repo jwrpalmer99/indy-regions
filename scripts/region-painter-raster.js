@@ -1,4 +1,5 @@
 import { getSceneImageMapping } from "./region-painter-foundry.js";
+import { getRegionDocumentShapes } from "./region-painter-region-adapter.js";
 import {
   pointInPreparedRegionShape,
   prepareRegionShape,
@@ -188,9 +189,7 @@ export function maskFromRegionShapes(region, {
   const opts = normalizeOptions(options);
   const maskData = createEmptyMaskData?.(opts);
   if (!maskData) return null;
-  const shapes = Array.isArray(region?.shapes)
-    ? region.shapes
-    : (Array.isArray(region?.document?.shapes) ? region.document.shapes : []);
+  const shapes = getRegionDocumentShapes(region);
   if (!shapes.length) return null;
 
   const usableShapes = shapes

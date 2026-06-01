@@ -77,7 +77,7 @@ function addRegionPaintTool(controls) {
     icon: "fas fa-paintbrush",
     button: true,
     visible: game?.user?.isGM === true,
-    onClick: (...args) => startPaintRegionTool(...args),
+    onChange: (...args) => startPaintRegionTool(...args),
   };
 
   if (Array.isArray(controls)) {

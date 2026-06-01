@@ -1,3 +1,5 @@
+const MAX_DELTA_CELLS = 750_000;
+
 export function maskDeltaMetadata(maskData) {
   if (!maskData?.mask) return null;
   return {
@@ -18,6 +20,19 @@ export function createMaskDelta(maskData) {
   return meta ? { ...meta, cells: new Map() } : null;
 }
 
+export function snapshotMaskBeforeDelta(maskData, delta) {
+  const meta = delta ? { ...delta } : maskDeltaMetadata(maskData);
+  if (!maskData?.mask || !meta) return null;
+  delete meta.cells;
+  const mask = new Uint8Array(maskData.mask);
+  if (delta?.cells?.size) {
+    for (const [index, value] of delta.cells.entries()) {
+      if (index < mask.length) mask[index] = value ? 1 : 0;
+    }
+  }
+  return { ...meta, mask };
+}
+
 export function createPaintDeltaRecorder(session) {
   const maskData = session?.maskData ?? null;
   const sourceMaskData = session?.sourceMaskData ?? maskData;
@@ -25,13 +40,45 @@ export function createPaintDeltaRecorder(session) {
   const sourceDelta = sourceMaskData && sourceMaskData !== maskData
     ? createMaskDelta(sourceMaskData)
     : null;
+  let maskSnapshot = null;
+  let sourceSnapshot = null;
+  const snapshotForTarget = (target, delta) => {
+    if (target === maskData) {
+      maskSnapshot ??= snapshotMaskBeforeDelta(maskData, delta);
+      return maskSnapshot;
+    }
+    if (target === sourceMaskData) {
+      sourceSnapshot ??= snapshotMaskBeforeDelta(sourceMaskData, delta);
+      return sourceSnapshot;
+    }
+    return null;
+  };
   return {
     type: "delta",
     maskData: maskDelta,
     sourceMaskData: sourceDelta,
+    get maskSnapshot() {
+      return maskSnapshot;
+    },
+    get sourceMaskSnapshot() {
+      return sourceSnapshot;
+    },
+    get currentMaskData() {
+      return maskData;
+    },
+    get currentSourceMaskData() {
+      return sourceMaskData;
+    },
     record(target, index, previousValue) {
       const delta = target === maskData ? maskDelta : (target === sourceMaskData ? sourceDelta : null);
+      if (target === maskData && maskSnapshot) return;
+      if (target === sourceMaskData && sourceSnapshot) return;
       if (!delta?.cells || delta.cells.has(index)) return;
+      if (delta.cells.size >= MAX_DELTA_CELLS) {
+        snapshotForTarget(target, delta);
+        delta.cells = null;
+        return;
+      }
       delta.cells.set(index, previousValue ? 1 : 0);
     },
   };
@@ -53,6 +100,17 @@ export function finalizeMaskDelta(delta) {
 
 export function finalizePaintDelta(recorder) {
   if (recorder?.type !== "delta") return null;
+  if (recorder.maskSnapshot || recorder.sourceMaskSnapshot) {
+    const maskData = recorder.maskSnapshot ?? snapshotMaskBeforeDelta(recorder.currentMaskData, recorder.maskData);
+    const sourceMaskData = recorder.currentSourceMaskData && recorder.currentSourceMaskData !== recorder.currentMaskData
+      ? (recorder.sourceMaskSnapshot ?? snapshotMaskBeforeDelta(recorder.currentSourceMaskData, recorder.sourceMaskData))
+      : maskData;
+    if (!maskData) return null;
+    return {
+      maskData,
+      sourceMaskData,
+    };
+  }
   const maskData = finalizeMaskDelta(recorder.maskData);
   const sourceMaskData = finalizeMaskDelta(recorder.sourceMaskData);
   if (!maskData && !sourceMaskData) return null;

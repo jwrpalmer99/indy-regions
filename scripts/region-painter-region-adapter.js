@@ -7,6 +7,9 @@ import {
   getRegionId,
 } from "./region-painter-foundry.js";
 import {
+  pointsBounds,
+  polygonArea,
+  pointInPolygon,
   pointInPreparedRegionShape,
   prepareRegionShape,
 } from "./region-painter-geometry.js";
@@ -23,7 +26,10 @@ import {
   normalizeHexColor,
   normalizeOptions,
 } from "./region-painter-options.js";
-import { toFiniteNumber } from "./region-painter-utils.js";
+import {
+  debugTiming,
+  toFiniteNumber,
+} from "./region-painter-utils.js";
 
 export function buildPaintRegionDocumentAppearance(options = {}) {
   return {
@@ -157,18 +163,98 @@ export function getCurrentRegionSources(session, {
   return sources;
 }
 
+export function getRegionDocumentShapes(region) {
+  const doc = region?.document ?? region;
+  if (Array.isArray(doc?.shapes)) return doc.shapes;
+  if (!region?.document && Array.isArray(region?.shapes)) return region.shapes;
+  return [];
+}
+
 export function findTargetRegionShapeAtPoint(session, point, options = {}) {
   if (!point) return null;
   const sources = getCurrentRegionSources(session, options);
+  const pointInBounds = (bounds) => Boolean(bounds
+    && point.x >= bounds.minX
+    && point.x <= bounds.maxX
+    && point.y >= bounds.minY
+    && point.y <= bounds.maxY);
+  const boundsArea = (bounds) => Math.max(0, Number(bounds?.width) || 0) * Math.max(0, Number(bounds?.height) || 0);
   for (let r = sources.length - 1; r >= 0; r -= 1) {
     const region = sources[r];
-    const shapes = Array.isArray(region?.shapes)
-      ? region.shapes
-      : (Array.isArray(region?.document?.shapes) ? region.document.shapes : []);
+    const shapes = getRegionDocumentShapes(region);
+    let testedShapes = 0;
+    let testedHoles = 0;
+    let boundsHoleHits = 0;
+    let firstSolidMatch = null;
+    let bestHoleBoundsMatch = null;
+    let bestHoleBoundsArea = Infinity;
     for (let i = shapes.length - 1; i >= 0; i -= 1) {
       const shape = prepareRegionShape(shapes[i]);
-      if (shape && pointInPreparedRegionShape(point, shape)) return shape;
+      if (!shape) continue;
+      testedShapes += 1;
+      if (Array.isArray(shape.contours) && shape.contours.length > 1) {
+        let bestHoleContour = null;
+        let bestHoleArea = Infinity;
+        let bestHoleExact = false;
+        const outerArea = Math.max(...shape.contours.map((contour) => Math.abs(polygonArea(contour))));
+        for (let c = 0; c < shape.contours.length; c += 1) {
+          const contour = shape.contours[c];
+          const exactHit = pointInPolygon(point, contour);
+          const contourBounds = exactHit ? null : pointsBounds(contour);
+          if (!exactHit && !pointInBounds(contourBounds)) continue;
+          const area = Math.abs(polygonArea(contour));
+          let containerCount = 0;
+          const sample = contour[0];
+          for (let j = 0; j < shape.contours.length; j += 1) {
+            if (j === c) continue;
+            if (pointInPolygon(sample, shape.contours[j])) containerCount += 1;
+          }
+          const isHoleContour = (containerCount % 2 === 1) || (area < outerArea);
+          if (!isHoleContour) continue;
+          if (bestHoleContour && bestHoleExact && !exactHit) continue;
+          if (bestHoleContour && exactHit === bestHoleExact && area >= bestHoleArea) continue;
+          bestHoleContour = contour;
+          bestHoleArea = area;
+          bestHoleExact = exactHit;
+        }
+        if (bestHoleContour) {
+          return {
+            ...shape,
+            bounds: shape.bounds,
+            contours: [bestHoleContour],
+            data: { type: "polygon", points: bestHoleContour, hole: true },
+            isHole: true,
+            polygon: bestHoleContour,
+          };
+        }
+      }
+      const exactShapeHit = pointInPreparedRegionShape(point, shape);
+      if (shape.isHole === true) {
+        testedHoles += 1;
+        if (exactShapeHit) return shape;
+        if (!pointInBounds(shape.bounds)) continue;
+        boundsHoleHits += 1;
+        const area = boundsArea(shape.bounds);
+        if (area < bestHoleBoundsArea) {
+          bestHoleBoundsMatch = shape;
+          bestHoleBoundsArea = area;
+        }
+        continue;
+      }
+      if (!exactShapeHit) continue;
+      firstSolidMatch ??= shape;
     }
+    if (bestHoleBoundsMatch) return bestHoleBoundsMatch;
+    if (firstSolidMatch) return firstSolidMatch;
+    debugTiming(options.moduleId ?? "indy-regions", "paint-shape-hit-test-miss", {
+      sourceIndex: r,
+      sourceCount: sources.length,
+      shapeCount: shapes.length,
+      testedShapes,
+      testedHoles,
+      boundsHoleHits,
+      point: { x: Math.round(point.x), y: Math.round(point.y) },
+    });
   }
   return null;
 }

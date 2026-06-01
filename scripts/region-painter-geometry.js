@@ -164,7 +164,7 @@ export function pointInPolygon(point, polygon) {
 }
 
 export function normalizeRegionShapePoints(shape) {
-  const raw = Array.isArray(shape?.points) ? shape.points : [];
+  const raw = Array.isArray(shape) ? shape : (Array.isArray(shape?.points) ? shape.points : []);
   if (!raw.length) return [];
   if (typeof raw[0] === "number") {
     const out = [];
@@ -180,13 +180,41 @@ export function normalizeRegionShapePoints(shape) {
     .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
 }
 
+export function normalizeRegionShapeContours(shape) {
+  const data = regionShapeToObject(shape);
+  if (!data) return [];
+  const rawPoints = Array.isArray(data.points) ? data.points : [];
+  const pointsAreContours = Array.isArray(rawPoints[0]) || Array.isArray(rawPoints[0]?.points);
+  const objectContourKeys = ["contour", "vertices", "polygon"];
+  const rawContours = Array.isArray(data.contours)
+    ? data.contours
+    : (pointsAreContours
+      ? rawPoints
+      : (Array.isArray(data.holes) ? [data.points, ...data.holes] : []));
+  const contours = rawContours
+    .map((contour) => {
+      for (const key of objectContourKeys) {
+        if (Array.isArray(contour?.[key])) return normalizeRegionShapePoints(contour[key]);
+      }
+      return normalizeRegionShapePoints(Array.isArray(contour?.points) ? contour.points : contour);
+    })
+    .filter((contour) => contour.length >= 3);
+  if (contours.length) return contours;
+  const points = normalizeRegionShapePoints(data);
+  return points.length >= 3 ? [points] : [];
+}
+
 export function regionShapeToObject(shape) {
   if (!shape) return null;
   if (typeof shape.toObject === "function") {
     try {
-      return shape.toObject(false);
+      return shape.toObject();
     } catch (_err) {
-      // Fall through to the original object.
+      try {
+        return shape.toObject(false);
+      } catch (_err2) {
+        // Fall through to the original object.
+      }
     }
   }
   return shape;
@@ -209,7 +237,8 @@ export function regionShapeBounds(shape) {
   if (!data) return null;
   const type = String(data.type ?? data.shape ?? data.kind ?? "").toLowerCase();
   if (type === "polygon" || Array.isArray(data.points)) {
-    return pointsBounds(normalizeRegionShapePoints(data));
+    const contours = normalizeRegionShapeContours(data);
+    return pointsBounds(contours.flat());
   }
   if (type === "rectangle" || type === "rect" || type === "ellipse" || type === "oval" || type === "circle") {
     const bounds = normalizeRectBounds(data);
@@ -259,8 +288,12 @@ export function pointInRegionShape(point, shape) {
   const type = String(data.type ?? "").toLowerCase();
 
   if (type === "polygon" || Array.isArray(data.points)) {
-    const polygon = normalizeRegionShapePoints(data);
-    return polygon.length >= 3 && pointInPolygon(point, polygon);
+    const contours = normalizeRegionShapeContours(data);
+    let inside = false;
+    for (const contour of contours) {
+      if (pointInPolygon(point, contour)) inside = !inside;
+    }
+    return inside;
   }
 
   if (type === "rectangle" || type === "rect") {
@@ -310,13 +343,15 @@ export function prepareRegionShape(shape) {
     bounds: regionShapeBounds(data),
     isHole: isRegionShapeHole(data),
     polygon: null,
+    contours: null,
     rectBounds: null,
   };
 
   if (type === "polygon" || Array.isArray(data.points)) {
-    prepared.polygon = normalizeRegionShapePoints(data);
-    if (prepared.polygon.length < 3) return null;
-    prepared.bounds = prepared.bounds ?? pointsBounds(prepared.polygon);
+    prepared.contours = normalizeRegionShapeContours(data);
+    prepared.polygon = prepared.contours[0] ?? null;
+    if (!prepared.polygon || prepared.polygon.length < 3) return null;
+    prepared.bounds = prepared.bounds ?? pointsBounds(prepared.contours.flat());
   } else if (type === "rectangle" || type === "rect" || type === "ellipse" || type === "oval" || type === "circle") {
     prepared.rectBounds = normalizeRectBounds(data);
     if (!prepared.rectBounds) return null;
@@ -339,6 +374,13 @@ export function pointInPreparedRegionShape(point, prepared) {
   if (!point || !prepared) return false;
   const bounds = prepared.bounds;
   if (bounds && (point.x < bounds.minX || point.x > bounds.maxX || point.y < bounds.minY || point.y > bounds.maxY)) return false;
+  if (prepared.contours?.length) {
+    let inside = false;
+    for (const contour of prepared.contours) {
+      if (pointInPolygon(point, contour)) inside = !inside;
+    }
+    return inside;
+  }
   if (prepared.polygon) return pointInPolygon(point, prepared.polygon);
 
   const data = prepared.data;

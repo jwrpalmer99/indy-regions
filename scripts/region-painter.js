@@ -1142,6 +1142,7 @@ function maskFromRegionShapes(region, options = {}) {
 
 function findTargetRegionShapeAtPoint(session, point) {
     return findTargetRegionShapeAtPointInSources(session, point, {
+      moduleId: painterState.moduleId,
       candidateFromMask: (maskData) => candidateFromMask(maskData, 0),
     });
   }
