@@ -1,6 +1,6 @@
 # Indy Regions
 
-Indy Regions is a Foundry VTT module for painting and editing Region shapes on the canvas. It adds a **Paint Region** tool to the Region controls so GMs can create new Regions or edit a selected Region by painting solid areas directly over the scene.
+Indy Regions is a Foundry VTT module for painting and editing Region shapes on the canvas. It adds a **Paint Region** tool to the Region controls so GMs can create new Regions or edit a selected Region by painting directly on the scene using additive/subtractive painting and flood fills.
 
 ## Compatibility
 
@@ -12,16 +12,13 @@ Indy Regions is a Foundry VTT module for painting and editing Region shapes on t
 
 - Paint new Region shapes directly on the canvas
 - Edit an existing selected Region
-- Add or subtract solid painted areas
+- Add or subtract painted areas
 - Undo and redo paint operations
 - Ctrl-wheel brush resizing
 - HSL-based flood fill with tolerance and hue/lightness bias controls
 - Alt-click fill from an existing Region shape
 - Shift-Alt-click erase from an existing Region shape
 - Smoothing and shrink/grow controls for final Region boundaries
-- Live preview color and opacity controls
-- Optional live border thickness control
-- Collapsible help section
 - Localized UI strings for common languages
 
 ## Basic Usage
