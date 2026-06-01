@@ -21,6 +21,7 @@ export const DEFAULT_WATER_OPTIONS = Object.freeze({
   fillColorMode: "rgb",
   fillBridgePx: 0,
   smoothing: 2.0,
+  morphSmoothPx: 0,
   featherShrinkPx: 0,
   requireWaterLikeSeed: false,
   requireWaterLikeFill: false,

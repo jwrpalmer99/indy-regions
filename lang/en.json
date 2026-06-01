@@ -40,6 +40,7 @@
         "FillHoles": "Fill Holes",
         "GridStep": "Grid Step",
         "ShrinkGrow": "Shrink / Grow",
+        "MaskSmooth": "Remove Boundary Noise",
         "BorderSmooth": "Border Smooth",
         "BorderThickness": "Border Thickness"
       },
@@ -52,6 +53,7 @@
         "FillHoles": "Fill internal holes when calculating the final Region boundary.",
         "GridStep": "1 is most precise; higher values are faster but coarser.",
         "ShrinkGrow": "Negative shrinks, positive grows the final boundary.",
+        "MaskSmooth": "Remove small boundary noise before tracing the final boundary.",
         "BorderSmooth": "0 keeps detail; higher values simplify jagged edges.",
         "BorderThickness": "0 hides live borders; thicker values make them easier to see."
       },

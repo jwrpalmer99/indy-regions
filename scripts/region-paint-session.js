@@ -34,6 +34,7 @@ export class PaintSession {
     this.onDomLeave ??= null;
     this.onWheel ??= null;
     this.gridStepUpdateTimer ??= null;
+    this.paintOptionsUpdateTimer ??= null;
     this.suppressCompatMouseUntil ??= 0;
     this.restoreRegionLayerInteraction ??= null;
     this.restoreCanvasDragSelection ??= null;
@@ -54,6 +55,10 @@ export class PaintSession {
     if (this.gridStepUpdateTimer) {
       clearTimeout(this.gridStepUpdateTimer);
       this.gridStepUpdateTimer = null;
+    }
+    if (this.paintOptionsUpdateTimer) {
+      clearTimeout(this.paintOptionsUpdateTimer);
+      this.paintOptionsUpdateTimer = null;
     }
   }
 

@@ -66,6 +66,7 @@ export async function renderPaintSessionDialog(session, {
       fillHoles: t("Dialog.Label.FillHoles", "Fill Holes"),
       gridStep: t("Dialog.Label.GridStep", "Grid Step"),
       shrinkGrow: t("Dialog.Label.ShrinkGrow", "Shrink / Grow"),
+      maskSmooth: t("Dialog.Label.MaskSmooth", "Remove Boundary Noise"),
       borderSmooth: t("Dialog.Label.BorderSmooth", "Border Smooth"),
       borderThickness: t("Dialog.Label.BorderThickness", "Border Thickness"),
     },
@@ -85,6 +86,7 @@ export async function renderPaintSessionDialog(session, {
       fillHoles: t("Dialog.Hint.FillHoles", "Fill internal holes when calculating the final Region boundary."),
       gridStep: t("Dialog.Hint.GridStep", "1 is most precise; higher values are faster but coarser."),
       shrinkGrow: t("Dialog.Hint.ShrinkGrow", "Negative shrinks, positive grows the final boundary."),
+      maskSmooth: t("Dialog.Hint.MaskSmooth", "Remove small boundary noise before tracing the final boundary."),
       borderSmooth: t("Dialog.Hint.BorderSmooth", "0 keeps detail; higher values simplify jagged edges."),
       borderThickness: t("Dialog.Hint.BorderThickness", "0 hides live borders; thicker values make them easier to see."),
     },
@@ -98,6 +100,7 @@ export async function renderPaintSessionDialog(session, {
       fillHoles: opts.fillHoles === true ? "checked" : "",
       gridStep: opts.gridStep,
       featherShrinkPx: opts.featherShrinkPx,
+      morphSmoothPx: opts.morphSmoothPx,
       smoothing: opts.smoothing,
       paintBorderThickness: opts.paintBorderThickness,
     },
@@ -194,13 +197,19 @@ export async function renderPaintSessionDialog(session, {
       if (input.name === "brushSizePx" && session.lastBrushPoint) {
         drawBrush?.(session, session.lastBrushPoint, session.paintMode ?? "add");
       }
-      if (["gridStep", "smoothing", "featherShrinkPx", "paintBorderThickness", "paintOpacity", "debug", "paintColor", "fillHoles"].includes(input.name)) {
+      if (["gridStep", "smoothing", "morphSmoothPx", "featherShrinkPx", "paintBorderThickness", "paintOpacity", "debug", "paintColor", "fillHoles"].includes(input.name)) {
         if (input.name === "gridStep") {
           if (session.gridStepUpdateTimer) clearTimeout(session.gridStepUpdateTimer);
           session.gridStepUpdateTimer = setTimeout(() => {
             session.gridStepUpdateTimer = null;
             void resetMaskResolution?.(session);
           }, 180);
+        } else if (["smoothing", "morphSmoothPx", "featherShrinkPx", "fillHoles"].includes(input.name)) {
+          if (session.paintOptionsUpdateTimer) clearTimeout(session.paintOptionsUpdateTimer);
+          session.paintOptionsUpdateTimer = setTimeout(() => {
+            session.paintOptionsUpdateTimer = null;
+            void refreshCandidate?.(session);
+          }, input.type === "range" ? 220 : 80);
         } else {
           void refreshCandidate?.(session);
         }

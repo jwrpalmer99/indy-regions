@@ -121,6 +121,100 @@ import {
 } from "./region-painter-utils.js";
 
 const painterState = new RegionPainterState();
+const CANDIDATE_WORKER_MIN_CELLS = 2_000_000;
+let candidateWorker = null;
+let candidateWorkerRequestId = 0;
+
+function getCandidateWorker() {
+  if (candidateWorker || typeof Worker === "undefined") return candidateWorker;
+  try {
+    candidateWorker = new Worker("modules/indy-regions/scripts/region-painter-candidate-worker.js", { type: "module" });
+  } catch (err) {
+    debugTiming(painterState.moduleId, "candidate-worker-unavailable", { error: err?.message ?? String(err) });
+    candidateWorker = null;
+  }
+  return candidateWorker;
+}
+
+function cropMaskDataForWorker(maskData) {
+  const bounds = getMaskBounds(maskData);
+  const { mask, cols, rows, gridStep } = maskData ?? {};
+  if (!mask || !bounds) return null;
+  const crop = new Uint8Array(bounds.width * bounds.height);
+  for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
+    const sourceRow = y * cols;
+    const targetRow = (y - bounds.minY) * bounds.width;
+    crop.set(mask.subarray(sourceRow + bounds.minX, sourceRow + bounds.maxX + 1), targetRow);
+  }
+  return {
+    mask: crop,
+    cols: bounds.width,
+    rows: bounds.height,
+    gridStep,
+    offsetX: maskOffsetX(maskData) + bounds.minX,
+    offsetY: maskOffsetY(maskData) + bounds.minY,
+    fullCols: maskFullCols(maskData),
+    fullRows: maskFullRows(maskData),
+    bounds: {
+      minX: 0,
+      minY: 0,
+      maxX: bounds.width - 1,
+      maxY: bounds.height - 1,
+      width: bounds.width,
+      height: bounds.height,
+    },
+  };
+}
+
+function candidateFromMaskWorker(maskData, options = {}) {
+  const worker = getCandidateWorker();
+  const workerMaskData = cropMaskDataForWorker(maskData);
+  if (!worker || !workerMaskData) return null;
+  const requestId = ++candidateWorkerRequestId;
+  const opts = normalizeOptions(options);
+  const workerOptions = {
+    smoothing: toFiniteNumber(opts.smoothing, DEFAULT_WATER_OPTIONS.smoothing),
+    fillHoles: opts.fillHoles === true,
+  };
+  const map = getSceneImageMapping(painterState.cachedImgW, painterState.cachedImgH);
+  const mapping = {
+    sceneX: map.sceneX,
+    sceneY: map.sceneY,
+    sceneWidth: map.sceneWidth,
+    sceneHeight: map.sceneHeight,
+    imgW: painterState.cachedImgW,
+    imgH: painterState.cachedImgH,
+  };
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      worker.removeEventListener("message", onMessage);
+      worker.removeEventListener("error", onError);
+    };
+    const onMessage = (event) => {
+      if (event.data?.requestId !== requestId) return;
+      cleanup();
+      if (event.data?.error) reject(new Error(event.data.error));
+      else resolve(event.data);
+    };
+    const onError = (event) => {
+      cleanup();
+      reject(new Error(event?.message || "Candidate worker failed."));
+    };
+    worker.addEventListener("message", onMessage);
+    worker.addEventListener("error", onError);
+    try {
+      worker.postMessage({
+        requestId,
+        maskData: workerMaskData,
+        options: workerOptions,
+        mapping,
+      }, [workerMaskData.mask.buffer]);
+    } catch (err) {
+      cleanup();
+      reject(err);
+    }
+  });
+}
 
 function configure({ moduleId = "indy-regions", getShaderChoices = null, syncRegionShaderFromBehavior = null } = {}) {
   painterState.configure({ moduleId, getShaderChoices, syncRegionShaderFromBehavior });
@@ -495,24 +589,190 @@ function dilateMaskData(maskData, radiusCells = 0) {
     };
   }
 
+function removeBoundaryNoiseMaskData(maskData, radiusCells = 0) {
+    const { mask, cols, rows, gridStep } = maskData ?? {};
+    const radius = Math.max(0, Math.round(Number(radiusCells) || 0));
+    const bounds = getMaskBounds(maskData);
+    if (!mask || !cols || !rows || !gridStep || !bounds || radius <= 0) return maskData;
+
+    // The boundary-band algorithm is exact for an opening with our diamond/L1
+    // structuring element, but only worth it for moderate radii. For larger
+    // radii, the distance-transform implementation scales better.
+    if (radius > 12) {
+      return dilateMaskData(erodeMaskData(maskData, radius), radius);
+    }
+
+    const width = bounds.width;
+    const height = bounds.height;
+    const size = width * height;
+    const out = new Uint8Array(size);
+    const activeCenters = new Uint8Array(size);
+    const candidateBand = new Uint8Array(size);
+    const activeIndices = [];
+    const candidateIndices = [];
+    const boundarySeeds = [];
+    const offsetX = maskOffsetX(maskData) + bounds.minX;
+    const offsetY = maskOffsetY(maskData) + bounds.minY;
+    const hasGlobal = (x, y) => x >= 0 && y >= 0 && x < cols && y < rows && mask[y * cols + x] !== 0;
+    const hasLocal = (x, y) => {
+      if (x < 0 || y < 0 || x >= width || y >= height) return false;
+      return out[y * width + x] !== 0;
+    };
+
+    for (let y = 0; y < height; y += 1) {
+      const sourceY = bounds.minY + y;
+      const sourceRow = sourceY * cols;
+      const targetRow = y * width;
+      for (let x = 0; x < width; x += 1) {
+        const sourceX = bounds.minX + x;
+        const idx = targetRow + x;
+        if (!mask[sourceRow + sourceX]) continue;
+        out[idx] = 1;
+        if (!hasGlobal(sourceX - 1, sourceY)
+          || !hasGlobal(sourceX + 1, sourceY)
+          || !hasGlobal(sourceX, sourceY - 1)
+          || !hasGlobal(sourceX, sourceY + 1)) {
+          boundarySeeds.push(idx);
+        }
+      }
+    }
+
+    const markDiamond = (array, indexList, cx, cy, r) => {
+      for (let dy = -r; dy <= r; dy += 1) {
+        const yy = cy + dy;
+        if (yy < 0 || yy >= height) continue;
+        const remaining = r - Math.abs(dy);
+        const row = yy * width;
+        const minX = Math.max(0, cx - remaining);
+        const maxX = Math.min(width - 1, cx + remaining);
+        for (let xx = minX; xx <= maxX; xx += 1) {
+          const idx = row + xx;
+          if (array[idx]) continue;
+          array[idx] = 1;
+          indexList.push(idx);
+        }
+      }
+    };
+
+    const centerRadius = radius * 2;
+    for (const idx of boundarySeeds) {
+      const y = Math.floor(idx / width);
+      const x = idx - (y * width);
+      markDiamond(candidateBand, candidateIndices, x, y, radius);
+      markDiamond(activeCenters, activeIndices, x, y, centerRadius);
+    }
+
+    const diamondFilled = (cx, cy, r) => {
+      for (let dy = -r; dy <= r; dy += 1) {
+        const yy = cy + dy;
+        const remaining = r - Math.abs(dy);
+        for (let dx = -remaining; dx <= remaining; dx += 1) {
+          if (!hasLocal(cx + dx, yy)) return false;
+        }
+      }
+      return true;
+    };
+
+    for (const idx of activeIndices) {
+      if (!out[idx]) continue;
+      const y = Math.floor(idx / width);
+      const x = idx - (y * width);
+      if (diamondFilled(x, y, radius)) activeCenters[idx] = 2;
+    }
+
+    const hasSurvivorNearby = (cx, cy, r) => {
+      for (let dy = -r; dy <= r; dy += 1) {
+        const yy = cy + dy;
+        if (yy < 0 || yy >= height) continue;
+        const remaining = r - Math.abs(dy);
+        const row = yy * width;
+        const minX = Math.max(0, cx - remaining);
+        const maxX = Math.min(width - 1, cx + remaining);
+        for (let xx = minX; xx <= maxX; xx += 1) {
+          if (activeCenters[row + xx] === 2) return true;
+        }
+      }
+      return false;
+    };
+
+    for (const idx of candidateIndices) {
+      if (!out[idx]) continue;
+      const y = Math.floor(idx / width);
+      const x = idx - (y * width);
+      out[idx] = hasSurvivorNearby(x, y, radius) ? 1 : 0;
+    }
+
+    let nextBounds = null;
+    for (let y = 0; y < height; y += 1) {
+      const row = y * width;
+      for (let x = 0; x < width; x += 1) {
+        if (out[row + x]) nextBounds = expandMaskBounds(nextBounds, x, y, width, height);
+      }
+    }
+    if (!nextBounds) return emptyDerivedMaskData(maskData);
+
+    const cropped = new Uint8Array(nextBounds.width * nextBounds.height);
+    for (let y = nextBounds.minY; y <= nextBounds.maxY; y += 1) {
+      const sourceRow = y * width;
+      const targetRow = (y - nextBounds.minY) * nextBounds.width;
+      cropped.set(out.subarray(sourceRow + nextBounds.minX, sourceRow + nextBounds.maxX + 1), targetRow);
+    }
+
+    return {
+      mask: cropped,
+      cols: nextBounds.width,
+      rows: nextBounds.height,
+      gridStep,
+      offsetX: offsetX + nextBounds.minX,
+      offsetY: offsetY + nextBounds.minY,
+      fullCols: maskFullCols(maskData),
+      fullRows: maskFullRows(maskData),
+      bounds: { minX: 0, minY: 0, maxX: nextBounds.width - 1, maxY: nextBounds.height - 1, width: nextBounds.width, height: nextBounds.height },
+    };
+  }
+
 function candidateFromMaskWithOptions(maskData, options = {}) {
     const totalStart = nowMs();
     const opts = normalizeOptions(options);
     const gridStep = Math.max(1, Number(maskData?.gridStep) || DEFAULT_WATER_OPTIONS.gridStep);
     const offsetPx = toFiniteNumber(opts.featherShrinkPx, DEFAULT_WATER_OPTIONS.featherShrinkPx);
     const radiusCells = Math.floor(Math.abs(offsetPx) / gridStep);
+    const morphSmoothPx = toFiniteNumber(opts.morphSmoothPx, DEFAULT_WATER_OPTIONS.morphSmoothPx);
+    const smoothRadiusCells = Math.floor(Math.abs(morphSmoothPx) / gridStep);
     const morphStart = nowMs();
-    const morphKey = radiusCells <= 0 ? "none" : `${offsetPx > 0 ? "grow" : "shrink"}:${radiusCells}`;
+    const morphKey = `${radiusCells <= 0 ? "none" : `${offsetPx > 0 ? "grow" : "shrink"}:${radiusCells}`}|smooth:${smoothRadiusCells}`;
     let candidateMaskData = maskData;
     let morphCacheHit = false;
-    if (radiusCells > 0) {
+    const morphSmoothTiming = [];
+    if (radiusCells > 0 || smoothRadiusCells > 0) {
       if (getMorphCache(maskData)?.key === morphKey && getMorphCache(maskData)?.maskData) {
         candidateMaskData = getMorphCache(maskData).maskData;
         morphCacheHit = true;
       } else {
-        candidateMaskData = offsetPx > 0
-          ? dilateMaskData(maskData, radiusCells)
-          : erodeMaskData(maskData, radiusCells);
+        if (radiusCells > 0) {
+          const passStart = nowMs();
+          candidateMaskData = offsetPx > 0
+            ? dilateMaskData(maskData, radiusCells)
+            : erodeMaskData(maskData, radiusCells);
+          morphSmoothTiming.push({
+            pass: offsetPx > 0 ? "shrink-grow:dilate" : "shrink-grow:erode",
+            radiusCells,
+            cols: candidateMaskData?.cols ?? 0,
+            rows: candidateMaskData?.rows ?? 0,
+            ms: roundTimingMs(nowMs() - passStart),
+          });
+        }
+        if (smoothRadiusCells > 0) {
+          const noiseStart = nowMs();
+          candidateMaskData = removeBoundaryNoiseMaskData(candidateMaskData, smoothRadiusCells);
+          morphSmoothTiming.push({
+            pass: "remove-boundary-noise:boundary-band-open",
+            radiusCells: smoothRadiusCells,
+            cols: candidateMaskData?.cols ?? 0,
+            rows: candidateMaskData?.rows ?? 0,
+            ms: roundTimingMs(nowMs() - noiseStart),
+          });
+        }
         setMorphCache(maskData, { key: morphKey, maskData: candidateMaskData });
       }
     }
@@ -531,6 +791,9 @@ function candidateFromMaskWithOptions(maskData, options = {}) {
       bounds: getMaskBounds(maskData),
       offsetPx,
       radiusCells,
+      morphSmoothPx,
+      smoothRadiusCells,
+      morphSmoothTiming,
       morphCacheHit,
       distanceCacheHit: getMorphTiming(maskData).distanceCacheHit,
       morphFastPath: getMorphTiming(maskData).morphFastPath,
@@ -541,6 +804,98 @@ function candidateFromMaskWithOptions(maskData, options = {}) {
       fillHoles: opts.fillHoles === true,
     });
     return result;
+  }
+
+async function candidateFromMaskWithOptionsAsync(maskData, options = {}, { useWorker = false } = {}) {
+    const totalStart = nowMs();
+    const opts = normalizeOptions(options);
+    const gridStep = Math.max(1, Number(maskData?.gridStep) || DEFAULT_WATER_OPTIONS.gridStep);
+    const offsetPx = toFiniteNumber(opts.featherShrinkPx, DEFAULT_WATER_OPTIONS.featherShrinkPx);
+    const radiusCells = Math.floor(Math.abs(offsetPx) / gridStep);
+    const morphSmoothPx = toFiniteNumber(opts.morphSmoothPx, DEFAULT_WATER_OPTIONS.morphSmoothPx);
+    const smoothRadiusCells = Math.floor(Math.abs(morphSmoothPx) / gridStep);
+    const morphStart = nowMs();
+    const morphKey = `${radiusCells <= 0 ? "none" : `${offsetPx > 0 ? "grow" : "shrink"}:${radiusCells}`}|smooth:${smoothRadiusCells}`;
+    let candidateMaskData = maskData;
+    let morphCacheHit = false;
+    const morphSmoothTiming = [];
+    if (radiusCells > 0 || smoothRadiusCells > 0) {
+      if (getMorphCache(maskData)?.key === morphKey && getMorphCache(maskData)?.maskData) {
+        candidateMaskData = getMorphCache(maskData).maskData;
+        morphCacheHit = true;
+      } else {
+        if (radiusCells > 0) {
+          const passStart = nowMs();
+          candidateMaskData = offsetPx > 0
+            ? dilateMaskData(maskData, radiusCells)
+            : erodeMaskData(maskData, radiusCells);
+          morphSmoothTiming.push({
+            pass: offsetPx > 0 ? "shrink-grow:dilate" : "shrink-grow:erode",
+            radiusCells,
+            cols: candidateMaskData?.cols ?? 0,
+            rows: candidateMaskData?.rows ?? 0,
+            ms: roundTimingMs(nowMs() - passStart),
+          });
+        }
+        if (smoothRadiusCells > 0) {
+          const noiseStart = nowMs();
+          candidateMaskData = removeBoundaryNoiseMaskData(candidateMaskData, smoothRadiusCells);
+          morphSmoothTiming.push({
+            pass: "remove-boundary-noise:boundary-band-open",
+            radiusCells: smoothRadiusCells,
+            cols: candidateMaskData?.cols ?? 0,
+            rows: candidateMaskData?.rows ?? 0,
+            ms: roundTimingMs(nowMs() - noiseStart),
+          });
+        }
+        setMorphCache(maskData, { key: morphKey, maskData: candidateMaskData });
+      }
+    }
+    const morphMs = nowMs() - morphStart;
+    const candidateCells = (candidateMaskData?.cols ?? 0) * (candidateMaskData?.rows ?? 0);
+    if (useWorker === true && candidateCells >= CANDIDATE_WORKER_MIN_CELLS) {
+      try {
+        const workerStart = nowMs();
+        const workerResult = await candidateFromMaskWorker(candidateMaskData, opts);
+        if (!workerResult) throw new Error("Candidate worker is not available.");
+        const candidate = workerResult?.candidate ?? null;
+        let fallbackCandidate = null;
+        if (!candidate && offsetPx < 0 && radiusCells > 0) {
+          const fallbackResult = await candidateFromMaskWorker(maskData, opts);
+          if (!fallbackResult) throw new Error("Candidate worker is not available.");
+          fallbackCandidate = fallbackResult?.candidate ?? null;
+        }
+        const result = candidate ?? fallbackCandidate;
+        if (result) result.maskData = maskData;
+        debugTiming(painterState.moduleId, "candidate-with-options", {
+          gridStep,
+          cols: maskData?.cols ?? 0,
+          rows: maskData?.rows ?? 0,
+          cells: (maskData?.cols ?? 0) * (maskData?.rows ?? 0),
+          bounds: getMaskBounds(maskData),
+          offsetPx,
+          radiusCells,
+          morphSmoothPx,
+          smoothRadiusCells,
+          morphSmoothTiming,
+          morphCacheHit,
+          distanceCacheHit: getMorphTiming(maskData).distanceCacheHit,
+          morphFastPath: getMorphTiming(maskData).morphFastPath,
+          morphMs: roundTimingMs(morphMs),
+          worker: true,
+          workerMs: roundTimingMs(nowMs() - workerStart),
+          workerTiming: workerResult?.timing ?? null,
+          totalMs: roundTimingMs(nowMs() - totalStart),
+          hadCandidate: Boolean(result),
+          usedFallback: Boolean(!candidate && fallbackCandidate),
+          fillHoles: opts.fillHoles === true,
+        });
+        return result;
+      } catch (err) {
+        debugTiming(painterState.moduleId, "candidate-worker-fallback", { error: err?.message ?? String(err) });
+      }
+    }
+    return candidateFromMaskWithOptions(maskData, opts);
   }
 
 function candidateFromMask(maskData, smoothing = DEFAULT_WATER_OPTIONS.smoothing, { fillHoles = false } = {}) {
@@ -1296,6 +1651,7 @@ function readPaintSessionOptions(session) {
       const fillColorMode = String(fillColorModeInput?.value ?? opts.fillColorMode ?? DEFAULT_WATER_OPTIONS.fillColorMode).trim().toLowerCase();
       opts.fillColorMode = fillColorMode === "hsl" ? "hsl" : "rgb";
       opts.smoothing = readNumber("smoothing", opts.smoothing);
+      opts.morphSmoothPx = clamp(readNumber("morphSmoothPx", opts.morphSmoothPx), 0, 32);
       opts.featherShrinkPx = readNumber("featherShrinkPx", opts.featherShrinkPx);
       opts.paintOpacity = normalizePaintOpacity(readNumber("paintOpacity", opts.paintOpacity), opts.paintOpacity);
       opts.paintBorderThickness = clamp(readNumber("paintBorderThickness", opts.paintBorderThickness), 0, 4);
@@ -1342,6 +1698,7 @@ function syncDialogInputsFromOptions(session) {
       fillBridgePx: opts.fillBridgePx,
       hslFillBias: opts.hslFillBias,
       smoothing: opts.smoothing,
+      morphSmoothPx: opts.morphSmoothPx,
       paintOpacity: opts.paintOpacity,
       paintBorderThickness: opts.paintBorderThickness,
       featherShrinkPx: opts.featherShrinkPx,
@@ -1368,15 +1725,18 @@ async function setTargetRegionShaderSuppressed(session, suppressed) {
     });
   }
 
-async function refreshPaintCandidate(session, { forceCandidate = false } = {}) {
+async function refreshPaintCandidate(session, { forceCandidate = false, skipPreviewIfClean = false } = {}) {
     if (!session?.maskData) return;
+    const refreshId = (session.candidateRefreshId ?? 0) + 1;
+    session.candidateRefreshId = refreshId;
     const totalStart = nowMs();
     const opts = readPaintSessionOptions(session);
     const borderThickness = clamp(toFiniteNumber(opts.paintBorderThickness, DEFAULT_WATER_OPTIONS.paintBorderThickness), 0, 4);
     if (session.isPaintSession === true && borderThickness <= 0 && forceCandidate !== true) {
       session.candidate = null;
+      const previewDirty = Boolean(session.paintPreviewDirtyBounds) || !session.previewSprite;
       const previewStart = nowMs();
-      setPaintMaskPreview(session);
+      if (!skipPreviewIfClean || previewDirty) setPaintMaskPreview(session);
       const previewMs = nowMs() - previewStart;
       const debugStart = nowMs();
       drawSessionDebug(session);
@@ -1391,6 +1751,7 @@ async function refreshPaintCandidate(session, { forceCandidate = false } = {}) {
         candidateSkipped: true,
         borderThickness,
         previewMs: roundTimingMs(previewMs),
+        previewSkipped: skipPreviewIfClean && !previewDirty,
         debugMs: roundTimingMs(debugMs),
         totalMs: roundTimingMs(nowMs() - totalStart),
         hadCandidate: false,
@@ -1399,13 +1760,16 @@ async function refreshPaintCandidate(session, { forceCandidate = false } = {}) {
     }
     const candidateStart = nowMs();
     const initialBorderThickness = clamp(toFiniteNumber(opts.paintBorderThickness, DEFAULT_WATER_OPTIONS.paintBorderThickness), 0, 4);
-    session.candidate = initialBorderThickness > 0
-      ? candidateFromMaskWithOptions(session.maskData, opts)
+    const nextCandidate = initialBorderThickness > 0
+      ? await candidateFromMaskWithOptionsAsync(session.maskData, opts, { useWorker: session.isPaintSession === true })
       : null;
+    if (session.candidateRefreshId !== refreshId || session.closed === true) return;
+    session.candidate = nextCandidate;
     const candidateMs = nowMs() - candidateStart;
     if (session.candidate) session.candidate.maskData = session.maskData;
+    const previewDirty = Boolean(session.paintPreviewDirtyBounds) || !session.previewSprite;
     const previewStart = nowMs();
-    setPaintMaskPreview(session);
+    if (!skipPreviewIfClean || previewDirty) setPaintMaskPreview(session);
     const previewMs = nowMs() - previewStart;
     const debugStart = nowMs();
     drawSessionDebug(session);
@@ -1419,10 +1783,22 @@ async function refreshPaintCandidate(session, { forceCandidate = false } = {}) {
       cells: (session.maskData?.cols ?? 0) * (session.maskData?.rows ?? 0),
       candidateMs: roundTimingMs(candidateMs),
       previewMs: roundTimingMs(previewMs),
+      previewSkipped: skipPreviewIfClean && !previewDirty,
       debugMs: roundTimingMs(debugMs),
       totalMs: roundTimingMs(nowMs() - totalStart),
       hadCandidate: Boolean(session.candidate),
     });
+  }
+
+function refreshPaintCandidateAfterStroke(session) {
+    if (!session?.maskData) return;
+    setPaintMaskPreview(session);
+    updatePaintSessionStatus(session);
+    if (session.paintRefreshTimer) clearTimeout(session.paintRefreshTimer);
+    session.paintRefreshTimer = setTimeout(() => {
+      session.paintRefreshTimer = null;
+      void refreshPaintCandidate(session, { forceCandidate: true, skipPreviewIfClean: true });
+    }, 80);
   }
 
 function drawPaintBrush(session, point, mode = null, options = null) {
@@ -1474,7 +1850,7 @@ function finishPaintStroke(session) {
       finalizeDelta: (recorder) => finalizePaintDelta(recorder),
       pushUndo: (paintSession, snapshot) => pushPaintUndoSnapshot(paintSession, snapshot),
       cancelPreviewUpdate: (paintSession) => cancelPaintPreviewUpdate(paintSession),
-      refreshCandidate: (paintSession) => refreshPaintCandidate(paintSession),
+      refreshCandidate: (paintSession) => refreshPaintCandidateAfterStroke(paintSession),
     });
   }
 
