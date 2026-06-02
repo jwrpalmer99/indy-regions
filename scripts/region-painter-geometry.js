@@ -336,6 +336,24 @@ export function regionShapeToObject(shape) {
   return shape;
 }
 
+function normalizeClipperShapeContours(shape) {
+  const paths = Array.isArray(shape?.clipperPaths) ? shape.clipperPaths : [];
+  if (!paths.length) return [];
+  const scale = Number(globalThis.CONST?.CLIPPER_SCALING_FACTOR) || 1;
+  return paths
+    .map((path) => {
+      if (!Array.isArray(path)) return [];
+      return path
+        .map((point) => {
+          const x = Number(point?.X ?? point?.x);
+          const y = Number(point?.Y ?? point?.y);
+          return { x: x / scale, y: y / scale };
+        })
+        .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+    })
+    .filter((contour) => contour.length >= 3);
+}
+
 export function isRegionShapeHole(shape) {
   const data = regionShapeToObject(shape);
   const op = String(data?.operation ?? data?.op ?? data?.mode ?? "").trim().toLowerCase();
@@ -453,6 +471,7 @@ export function prepareRegionShape(shape) {
   const data = regionShapeToObject(shape);
   if (!data) return null;
   const type = String(data.type ?? data.shape ?? data.kind ?? "").toLowerCase();
+  const clipperContours = normalizeClipperShapeContours(shape);
   const prepared = {
     data,
     type,
@@ -463,7 +482,11 @@ export function prepareRegionShape(shape) {
     rectBounds: null,
   };
 
-  if (type === "polygon" || Array.isArray(data.points)) {
+  if (clipperContours.length) {
+    prepared.contours = clipperContours;
+    prepared.polygon = prepared.contours[0] ?? null;
+    prepared.bounds = pointsBounds(prepared.contours.flat());
+  } else if (type === "polygon" || Array.isArray(data.points)) {
     prepared.contours = normalizeRegionShapeContours(data);
     prepared.polygon = prepared.contours[0] ?? null;
     if (!prepared.polygon || prepared.polygon.length < 3) return null;

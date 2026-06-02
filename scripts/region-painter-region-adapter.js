@@ -166,8 +166,36 @@ export function getCurrentRegionSources(session, {
 export function getRegionDocumentShapes(region) {
   const doc = region?.document ?? region;
   if (Array.isArray(doc?.shapes)) return doc.shapes;
-  if (!region?.document && Array.isArray(region?.shapes)) return region.shapes;
   return [];
+}
+
+function testNativeRegionShapePoint(shape, point) {
+  if (!shape || !point || typeof shape.testPoint !== "function") return null;
+  try {
+    return shape.testPoint(point) === true;
+  } catch (_err) {
+    return null;
+  }
+}
+
+function testNativeRegionBounds(region, point) {
+  const bounds = region?.document?.bounds ?? region?.bounds ?? null;
+  if (!bounds || !point) return null;
+  try {
+    if (typeof bounds.contains === "function") return bounds.contains(point.x, point.y) === true;
+    const left = Number(bounds.left ?? bounds.x ?? bounds.minX);
+    const top = Number(bounds.top ?? bounds.y ?? bounds.minY);
+    const width = Number(bounds.width);
+    const height = Number(bounds.height);
+    const right = Number(bounds.right ?? bounds.maxX ?? (Number.isFinite(left) && Number.isFinite(width) ? left + width : NaN));
+    const bottom = Number(bounds.bottom ?? bounds.maxY ?? (Number.isFinite(top) && Number.isFinite(height) ? top + height : NaN));
+    if ([left, top, right, bottom].every(Number.isFinite)) {
+      return point.x >= left && point.x <= right && point.y >= top && point.y <= bottom;
+    }
+  } catch (_err) {
+    // Fall back to shape-level tests.
+  }
+  return null;
 }
 
 export function findTargetRegionShapeAtPoint(session, point, options = {}) {
@@ -181,6 +209,8 @@ export function findTargetRegionShapeAtPoint(session, point, options = {}) {
   const boundsArea = (bounds) => Math.max(0, Number(bounds?.width) || 0) * Math.max(0, Number(bounds?.height) || 0);
   for (let r = sources.length - 1; r >= 0; r -= 1) {
     const region = sources[r];
+    const nativeBoundsHit = testNativeRegionBounds(region, point);
+    if (nativeBoundsHit === false) continue;
     const shapes = getRegionDocumentShapes(region);
     let testedShapes = 0;
     let testedHoles = 0;
@@ -189,7 +219,8 @@ export function findTargetRegionShapeAtPoint(session, point, options = {}) {
     let bestHoleBoundsMatch = null;
     let bestHoleBoundsArea = Infinity;
     for (let i = shapes.length - 1; i >= 0; i -= 1) {
-      const shape = prepareRegionShape(shapes[i]);
+      const originalShape = shapes[i];
+      const shape = prepareRegionShape(originalShape);
       if (!shape) continue;
       testedShapes += 1;
       if (Array.isArray(shape.contours) && shape.contours.length > 1) {
@@ -228,7 +259,8 @@ export function findTargetRegionShapeAtPoint(session, point, options = {}) {
           };
         }
       }
-      const exactShapeHit = pointInPreparedRegionShape(point, shape);
+      const nativeShapeHit = testNativeRegionShapePoint(originalShape, point);
+      const exactShapeHit = nativeShapeHit ?? pointInPreparedRegionShape(point, shape);
       if (shape.isHole === true) {
         testedHoles += 1;
         if (exactShapeHit) return shape;
