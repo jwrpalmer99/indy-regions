@@ -237,7 +237,12 @@ export async function renderPaintSessionDialog(session, {
       : (dialog.element?.[0] instanceof Element ? dialog.element[0] : null);
     session.root = root?.querySelector?.(".indy-regions-paint-dialog") ?? root;
     if (!session.root) return;
-    session.root.style.setProperty("--indy-paint-dialog-scale", String(normalizeDialogScale(session.options?.dialogScale)));
+    const applyDialogScale = (value) => {
+      const scale = String(normalizeDialogScale(value));
+      session.root.style.setProperty("--indy-paint-dialog-scale", scale);
+      session.root.closest?.(".indy-regions-paint-window")?.style?.setProperty?.("--indy-paint-dialog-scale", scale);
+    };
+    applyDialogScale(session.options?.dialogScale);
     const helpDetails = session.root.querySelector("[data-paint-help]");
     if (helpDetails instanceof HTMLDetailsElement) {
       session.addDomListener(helpDetails, "toggle", () => {
@@ -266,7 +271,7 @@ export async function renderPaintSessionDialog(session, {
       readOptions?.(session);
       if (input.name === "dialogScale") {
         if (event.type === "change") {
-          session.root.style.setProperty("--indy-paint-dialog-scale", String(normalizeDialogScale(input.value)));
+          applyDialogScale(input.value);
         }
         return;
       }
