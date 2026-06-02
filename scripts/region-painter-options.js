@@ -60,31 +60,6 @@ export function normalizeHslFillBias(value, fallback = DEFAULT_WATER_OPTIONS.hsl
   return clamp(toFiniteNumber(value, fallback), -1, 1);
 }
 
-export function rgbToWaterScore(r, g, b) {
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const chroma = max - min;
-  const luma = (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
-  if (chroma < 7) return 0;
-  if (luma < 8 || luma > 238) return 0;
-
-  // Reject foliage and warm earth/wood tones before accepting cool water.
-  if (g > b + 34 && g > r + 18) return 0;
-  if (r > b + 16 && r > g + 8) return 0;
-
-  const blueWater = b >= r + 8 && b >= g * 0.68;
-  const cyanWater = g >= r + 8 && b >= r + 6 && Math.abs(g - b) <= 86;
-  const darkWater = luma < 95 && b >= r + 4 && g >= r - 14 && chroma >= 9;
-  if (!blueWater && !cyanWater && !darkWater) return 0;
-
-  const coolStrength = Math.max(b - r, Math.min(g, b) - r, 0);
-  return Math.max(0, Math.min(1, (coolStrength + chroma * 0.25) / 90));
-}
-
-export function isWaterLikeRgb(r, g, b) {
-  return rgbToWaterScore(r, g, b) >= 0.08;
-}
-
 export function normalizeHexColor(value, fallback = "#ff0000") {
   const raw = String(value ?? "").trim();
   const match = raw.match(/^#?([0-9a-f]{6})$/i);

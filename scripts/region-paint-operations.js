@@ -54,8 +54,6 @@ export async function floodFillPaintSession(session, point, subtract = false, {
   const opts = {
     ...readOptions?.(session),
     fillColorMode: "hsl",
-    requireWaterLikeSeed: false,
-    requireWaterLikeFill: false,
   };
   const recorder = createDeltaRecorder?.(session);
   const record = recorder?.snapshotOnly === true ? null : (recorder?.record?.bind(recorder) ?? null);

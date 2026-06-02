@@ -18,7 +18,6 @@ import {
 import {
   getSceneBackgroundPath,
   getSceneImageMapping,
-  getWorldHitRadius,
   imageGridPointToScene,
   sceneToImagePoint,
   setRegionPlaceableVisible,
@@ -83,7 +82,6 @@ import {
 import {
   getStoredPaintColor,
   getStoredPaintOptions,
-  isWaterLikeRgb,
   normalizeFillBridgePx,
   normalizeBorderSmoothType,
   normalizeHexColor,
@@ -121,7 +119,6 @@ import {
 import {
   clamp,
   debugTiming,
-  formatText,
   localizeText,
   nowMs,
   roundTimingMs,
@@ -1138,10 +1135,6 @@ function applySparseFloodFillToMask(maskData, sceneX, sceneY, mode = "add", opti
     const seedR = pixels[seedIdx];
     const seedG = pixels[seedIdx + 1];
     const seedB = pixels[seedIdx + 2];
-    if (opts.requireWaterLikeSeed !== false && !isWaterLikeRgb(seedR, seedG, seedB)) {
-      return { changed: 0, visited: 0 };
-    }
-
     const fillColorMode = String(opts.fillColorMode ?? DEFAULT_WATER_OPTIONS.fillColorMode).trim().toLowerCase() === "hsl"
       ? "hsl"
       : "rgb";
@@ -1214,7 +1207,6 @@ function applySparseFloodFillToMask(maskData, sceneX, sceneY, mode = "add", opti
         const db = pixels[idx + 2] - seedB;
         matches = ((dr * dr) + (dg * dg) + (db * db)) <= tolSq;
       }
-      if (matches && opts.requireWaterLikeFill !== false) matches = isWaterLikeRgb(pixels[idx], pixels[idx + 1], pixels[idx + 2]);
       if (matchCache) matchCache[localIndex] = matches ? 2 : 1;
       else matchMap?.set(localIndex, matches);
       return matches;
@@ -1764,7 +1756,7 @@ function readPaintSessionOptions(session) {
 
 function updatePaintSessionStatus(session) {
     if (!session?.root) return;
-    const status = session.root.querySelector("[data-water-status]");
+    const status = session.root.querySelector("[data-paint-status]");
     const undoButton = session.root.querySelector("[data-paint-action='undo']");
     const redoButton = session.root.querySelector("[data-paint-action='redo']");
     if (status) {

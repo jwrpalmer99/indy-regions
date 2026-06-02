@@ -31,8 +31,6 @@ export const DEFAULT_WATER_OPTIONS = Object.freeze({
   smoothing: 2.0,
   borderSmoothType: "rounded",
   featherShrinkPx: 0,
-  requireWaterLikeSeed: false,
-  requireWaterLikeFill: false,
   minShapeArea: 24,
   debug: false,
   brushSizePx: 96,

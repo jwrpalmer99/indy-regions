@@ -1,7 +1,6 @@
 import { getSceneImageMapping } from "./region-painter-foundry.js";
 import { getRegionDocumentShapes } from "./region-painter-region-adapter.js";
 import {
-  pointInPreparedRegionShape,
   prepareRegionShape,
 } from "./region-painter-geometry.js";
 import {
