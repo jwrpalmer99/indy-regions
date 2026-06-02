@@ -65,7 +65,8 @@
         "BorderSmooth": "边界平滑",
         "BorderThickness": "边界粗细",
         "BorderSmoothType": "边界平滑类型",
-        "Cleanup": "Cleanup"
+        "Cleanup": "Cleanup",
+        "DialogScale": "UI Scale"
       },
       "Hint": {
         "PaintOpacity": "0 为透明，1 为不透明。",
@@ -78,7 +79,8 @@
         "ShrinkGrow": "负值收缩，正值扩张最终边界。",
         "BorderSmooth": "0 保留细节；较高值会简化锯齿边缘。",
         "BorderThickness": "0 隐藏实时边界；较高值更容易看见。",
-        "BorderSmoothType": "选择遮罩处理后如何平滑追踪出的边界。"
+        "BorderSmoothType": "选择遮罩处理后如何平滑追踪出的边界。",
+        "DialogScale": "Resize the paint dialog controls."
       },
       "Status": {
         "Paint": "在画布上绘制以添加到区域。Shift-左键会减去。"

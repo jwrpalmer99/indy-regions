@@ -89,6 +89,7 @@ import {
   normalizeHexColor,
   normalizeHslFillBias,
   normalizeOptions,
+  normalizeDialogScale,
   normalizePaintOpacity,
   rgb255ToHsl,
   setStoredPaintColor,
@@ -1742,6 +1743,7 @@ function readPaintSessionOptions(session) {
       }
       opts.featherShrinkPx = readNumber("featherShrinkPx", opts.featherShrinkPx);
       opts.paintOpacity = normalizePaintOpacity(readNumber("paintOpacity", opts.paintOpacity), opts.paintOpacity);
+      opts.dialogScale = normalizeDialogScale(readNumber("dialogScale", opts.dialogScale), opts.dialogScale);
       opts.paintBorderThickness = clamp(readNumber("paintBorderThickness", opts.paintBorderThickness), 0, 4);
       const debugInput = root.querySelector('[name="debug"]');
       if (debugInput instanceof HTMLInputElement) opts.debug = debugInput.checked === true;
@@ -1788,6 +1790,7 @@ function syncDialogInputsFromOptions(session) {
       smoothing: opts.smoothing,
       borderSmoothType: opts.borderSmoothType,
       paintOpacity: opts.paintOpacity,
+      dialogScale: opts.dialogScale,
       paintBorderThickness: opts.paintBorderThickness,
       featherShrinkPx: opts.featherShrinkPx,
     })) {

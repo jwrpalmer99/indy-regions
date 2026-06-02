@@ -65,7 +65,8 @@
         "BorderSmooth": "Border Smooth",
         "BorderSmoothType": "Border Smooth Type",
         "BorderThickness": "Border Thickness",
-        "Cleanup": "Cleanup"
+        "Cleanup": "Cleanup",
+        "DialogScale": "UI Scale"
       },
       "Hint": {
         "PaintOpacity": "0 transparent, 1 opaque.",
@@ -78,7 +79,8 @@
         "ShrinkGrow": "Negative shrinks, positive grows the final boundary.",
         "BorderSmooth": "0 keeps detail; higher values simplify jagged edges.",
         "BorderSmoothType": "Choose how the traced boundary is smoothed after mask processing.",
-        "BorderThickness": "0 hides live borders; thicker values make them easier to see."
+        "BorderThickness": "0 hides live borders; thicker values make them easier to see.",
+        "DialogScale": "Resize the paint dialog controls."
       },
       "BorderSmoothType": {
         "Catmull": "Catmull-Rom",

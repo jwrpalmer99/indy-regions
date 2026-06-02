@@ -65,7 +65,8 @@
         "BorderSmooth": "Suavização da borda",
         "BorderThickness": "Espessura da borda",
         "BorderSmoothType": "Tipo de suavizacao da borda",
-        "Cleanup": "Cleanup"
+        "Cleanup": "Cleanup",
+        "DialogScale": "UI Scale"
       },
       "Hint": {
         "PaintOpacity": "0 transparente, 1 opaco.",
@@ -78,7 +79,8 @@
         "ShrinkGrow": "Negativo reduz, positivo amplia o contorno final.",
         "BorderSmooth": "0 mantém detalhes; valores maiores simplificam bordas irregulares.",
         "BorderThickness": "0 oculta bordas ao vivo; valores maiores as tornam mais visíveis.",
-        "BorderSmoothType": "Escolhe como o limite tracado e suavizado depois do processamento da mascara."
+        "BorderSmoothType": "Escolhe como o limite tracado e suavizado depois do processamento da mascara.",
+        "DialogScale": "Resize the paint dialog controls."
       },
       "Status": {
         "Paint": "Pinte no canvas para adicionar à região. Shift-botão esquerdo subtrai."

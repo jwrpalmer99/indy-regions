@@ -38,6 +38,7 @@ export const DEFAULT_WATER_OPTIONS = Object.freeze({
   brushSizePx: 96,
   paintColor: "#ff0000",
   paintOpacity: 0.65,
+  dialogScale: 1,
   hslFillBias: 0,
   paintBorderThickness: 2,
   fillHoles: false,

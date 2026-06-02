@@ -65,7 +65,8 @@
         "BorderSmooth": "Smussatura bordo",
         "BorderThickness": "Spessore bordo",
         "BorderSmoothType": "Tipo smussatura bordo",
-        "Cleanup": "Cleanup"
+        "Cleanup": "Cleanup",
+        "DialogScale": "UI Scale"
       },
       "Hint": {
         "PaintOpacity": "0 trasparente, 1 opaco.",
@@ -78,7 +79,8 @@
         "ShrinkGrow": "Negativo riduce, positivo espande il bordo finale.",
         "BorderSmooth": "0 conserva i dettagli; valori più alti semplificano bordi frastagliati.",
         "BorderThickness": "0 nasconde i bordi live; valori più alti li rendono più visibili.",
-        "BorderSmoothType": "Sceglie come smussare il limite tracciato dopo l elaborazione della maschera."
+        "BorderSmoothType": "Sceglie come smussare il limite tracciato dopo l elaborazione della maschera.",
+        "DialogScale": "Resize the paint dialog controls."
       },
       "Status": {
         "Paint": "Dipingi sul canvas per aggiungere alla regione. Maiusc-tasto sinistro sottrae."

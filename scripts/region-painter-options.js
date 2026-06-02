@@ -33,6 +33,7 @@ export function normalizeOptions(options = {}) {
   merged.fillBridgePx = clamp(toFiniteNumber(merged.fillBridgePx, DEFAULT_WATER_OPTIONS.fillBridgePx), 0, MAX_FILL_BRIDGE_PX);
   merged.borderSmoothType = normalizeBorderSmoothType(merged.borderSmoothType);
   merged.fillHoles = merged.fillHoles === true;
+  merged.dialogScale = normalizeDialogScale(merged.dialogScale);
   return merged;
 }
 
@@ -49,6 +50,10 @@ export function normalizeFillBridgePx(value, fallback = DEFAULT_WATER_OPTIONS.fi
 
 export function normalizePaintOpacity(value, fallback = DEFAULT_WATER_OPTIONS.paintOpacity) {
   return clamp(toFiniteNumber(value, fallback), 0, 1);
+}
+
+export function normalizeDialogScale(value, fallback = DEFAULT_WATER_OPTIONS.dialogScale) {
+  return clamp(toFiniteNumber(value, fallback), 0.75, 1.5);
 }
 
 export function normalizeHslFillBias(value, fallback = DEFAULT_WATER_OPTIONS.hslFillBias) {
@@ -134,6 +139,7 @@ export function setStoredPaintOptions(moduleId, options = {}) {
       fillColorMode: String(options.fillColorMode ?? DEFAULT_WATER_OPTIONS.fillColorMode).trim().toLowerCase() === "hsl" ? "hsl" : "rgb",
       paintColor: normalizeHexColor(options.paintColor, DEFAULT_WATER_OPTIONS.paintColor),
       paintOpacity: normalizePaintOpacity(options.paintOpacity),
+      dialogScale: normalizeDialogScale(options.dialogScale),
       hslFillBias: normalizeHslFillBias(options.hslFillBias),
       paintBorderThickness: clamp(toFiniteNumber(options.paintBorderThickness, DEFAULT_WATER_OPTIONS.paintBorderThickness), 0, 4),
       fillHoles: options.fillHoles === true,

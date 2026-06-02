@@ -65,7 +65,8 @@
         "BorderSmooth": "Lissage du bord",
         "BorderThickness": "Épaisseur du bord",
         "BorderSmoothType": "Type de lissage du bord",
-        "Cleanup": "Cleanup"
+        "Cleanup": "Cleanup",
+        "DialogScale": "UI Scale"
       },
       "Hint": {
         "PaintOpacity": "0 transparent, 1 opaque.",
@@ -78,7 +79,8 @@
         "ShrinkGrow": "Négatif réduit, positif agrandit le contour final.",
         "BorderSmooth": "0 conserve les détails; les valeurs plus hautes simplifient les bords irréguliers.",
         "BorderThickness": "0 masque les bords en direct; les valeurs plus hautes les rendent plus visibles.",
-        "BorderSmoothType": "Choisit comment la limite tracee est lissee apres le traitement du masque."
+        "BorderSmoothType": "Choisit comment la limite tracee est lissee apres le traitement du masque.",
+        "DialogScale": "Resize the paint dialog controls."
       },
       "Status": {
         "Paint": "Peignez sur le canevas pour ajouter à la région. Maj-clic gauche soustrait."

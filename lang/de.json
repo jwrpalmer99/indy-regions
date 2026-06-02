@@ -65,7 +65,8 @@
         "BorderSmooth": "Randglaettung",
         "BorderThickness": "Randstaerke",
         "BorderSmoothType": "Randglaettungstyp",
-        "Cleanup": "Cleanup"
+        "Cleanup": "Cleanup",
+        "DialogScale": "UI Scale"
       },
       "Hint": {
         "PaintOpacity": "0 transparent, 1 deckend.",
@@ -78,7 +79,8 @@
         "ShrinkGrow": "Negativ schrumpft, positiv vergroessert die finale Grenze.",
         "BorderSmooth": "0 behaelt Details; hoehere Werte vereinfachen gezackte Kanten.",
         "BorderThickness": "0 blendet Live-Raender aus; hoehere Werte machen sie sichtbarer.",
-        "BorderSmoothType": "Waehlt, wie die nachgezeichnete Grenze nach der Maskenverarbeitung geglaettet wird."
+        "BorderSmoothType": "Waehlt, wie die nachgezeichnete Grenze nach der Maskenverarbeitung geglaettet wird.",
+        "DialogScale": "Resize the paint dialog controls."
       },
       "Status": {
         "Paint": "Male auf der Arbeitsflaeche, um die Region zu erweitern. Umschalt-linke Maustaste entfernt."

@@ -12,6 +12,7 @@ import {
   normalizeHslFillBias,
   normalizeOptions,
   normalizePaintOpacity,
+  normalizeDialogScale,
 } from "./region-painter-options.js";
 import {
   debugUiDisplayStyle,
@@ -119,6 +120,7 @@ export async function renderPaintSessionDialog(session, {
       borderSmooth: t("Dialog.Label.BorderSmooth", "Border Smooth"),
       borderSmoothType: t("Dialog.Label.BorderSmoothType", "Border Smooth Type"),
       borderThickness: t("Dialog.Label.BorderThickness", "Border Thickness"),
+      dialogScale: t("Dialog.Label.DialogScale", "UI Scale"),
     },
     status: {
       paint: t("Dialog.Status.Paint", "Paint on the canvas to add to the region. Shift-left mouse subtracts."),
@@ -141,6 +143,7 @@ export async function renderPaintSessionDialog(session, {
       borderSmooth: t("Dialog.Hint.BorderSmooth", "0 keeps detail; higher values simplify jagged edges."),
       borderSmoothType: t("Dialog.Hint.BorderSmoothType", "Choose how the traced boundary is smoothed after mask processing."),
       borderThickness: t("Dialog.Hint.BorderThickness", "0 hides live borders; thicker values make them easier to see."),
+      dialogScale: t("Dialog.Hint.DialogScale", "Resize the paint dialog controls."),
     },
     values: {
       paintColor: normalizeHexColor(opts.paintColor, DEFAULT_WATER_OPTIONS.paintColor),
@@ -155,6 +158,7 @@ export async function renderPaintSessionDialog(session, {
       smoothing: opts.smoothing,
       borderSmoothType,
       paintBorderThickness: opts.paintBorderThickness,
+      dialogScale: normalizeDialogScale(opts.dialogScale),
     },
     borderSmoothTypeOptions: borderSmoothTypeChoices
       .map(([value, label]) => `<option value="${escapeHtml(value)}"${value === borderSmoothType ? " selected" : ""}>${escapeHtml(label)}</option>`)
@@ -233,24 +237,39 @@ export async function renderPaintSessionDialog(session, {
       : (dialog.element?.[0] instanceof Element ? dialog.element[0] : null);
     session.root = root?.querySelector?.(".indy-regions-paint-dialog") ?? root;
     if (!session.root) return;
+    session.root.style.setProperty("--indy-paint-dialog-scale", String(normalizeDialogScale(session.options?.dialogScale)));
     const helpDetails = session.root.querySelector("[data-paint-help]");
     if (helpDetails instanceof HTMLDetailsElement) {
       session.addDomListener(helpDetails, "toggle", () => {
         setStoredPaintHelpOpen(moduleId, helpDetails.open === true);
       });
     }
+    const scaleControl = session.root.querySelector(".indy-dialog-scale-control");
+    if (scaleControl instanceof Element) {
+      for (const eventName of ["click", "pointerdown", "pointerup", "mousedown", "mouseup", "touchstart", "touchend"]) {
+        session.addDomListener(scaleControl, eventName, (event) => event.stopPropagation());
+      }
+    }
     const runGridStepUpdate = () => runCoalescedSessionTask(session, "gridStepUpdate", () => resetMaskResolution?.(session));
     const runPaintOptionsUpdate = () => runCoalescedSessionTask(session, "paintOptionsUpdate", () => refreshCandidate?.(session));
     const onInput = (event) => {
       const input = event.target;
       if (!(input instanceof HTMLInputElement) && !(input instanceof HTMLSelectElement)) return;
-      const peers = session.root.querySelectorAll(`[name="${input.name}"]`);
-      for (const peer of peers) {
-        if (peer === input || (!(peer instanceof HTMLInputElement) && !(peer instanceof HTMLSelectElement))) continue;
-        if (peer instanceof HTMLInputElement && peer.type === "checkbox" && input instanceof HTMLInputElement) peer.checked = input.checked;
-        else peer.value = input.value;
+      if (input.name !== "dialogScale") {
+        const peers = session.root.querySelectorAll(`[name="${input.name}"]`);
+        for (const peer of peers) {
+          if (peer === input || (!(peer instanceof HTMLInputElement) && !(peer instanceof HTMLSelectElement))) continue;
+          if (peer instanceof HTMLInputElement && peer.type === "checkbox" && input instanceof HTMLInputElement) peer.checked = input.checked;
+          else peer.value = input.value;
+        }
       }
       readOptions?.(session);
+      if (input.name === "dialogScale") {
+        if (event.type === "change") {
+          session.root.style.setProperty("--indy-paint-dialog-scale", String(normalizeDialogScale(input.value)));
+        }
+        return;
+      }
       if (input.name === "brushSizePx" && session.lastBrushPoint) {
         drawBrush?.(session, session.lastBrushPoint, session.paintMode ?? "add");
       }
