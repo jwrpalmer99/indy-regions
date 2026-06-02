@@ -1063,34 +1063,39 @@ function stampBrushOnMask(maskData, sceneX, sceneY, mode = "add", options = {}, 
       changedMaxX = Math.max(changedMaxX, gx);
       changedMaxY = Math.max(changedMaxY, gy);
     };
+    const applyCell = (gx, gy) => {
+      if (gx < 0 || gx >= cols || gy < 0 || gy >= rows) return;
+      const idx = gy * cols + gx;
+      if (op === "subtract" || op === "remove") {
+        if (!mask[idx]) return;
+        changeRecorder?.(maskData, idx, mask[idx]);
+        mask[idx] = 0;
+        if (maskData.alphaMask && idx < maskData.alphaMask.length) maskData.alphaMask[idx] = 0;
+      } else {
+        if (mask[idx]) return;
+        changeRecorder?.(maskData, idx, mask[idx]);
+        mask[idx] = 1;
+        if (maskData.alphaMask && idx < maskData.alphaMask.length) maskData.alphaMask[idx] = 255;
+      }
+      changed += 1;
+      noteChangedCell(gx, gy);
+    };
 
-    for (let gy = centerGY - radiusCells; gy <= centerGY + radiusCells; gy += 1) {
-      if (gy < 0 || gy >= rows) continue;
-      for (let gx = centerGX - radiusCells; gx <= centerGX + radiusCells; gx += 1) {
-        if (gx < 0 || gx >= cols) continue;
-        const px = (gx + 0.5) * gridStep;
-        const py = (gy + 0.5) * gridStep;
-        const dx = Math.max(0, Math.abs(px - imgPoint.x) - (gridStep * 0.5));
-        const dy = Math.max(0, Math.abs(py - imgPoint.y) - (gridStep * 0.5));
-        if (((dx * dx) + (dy * dy)) > radiusSq) continue;
-        const idx = gy * cols + gx;
-        if (op === "subtract" || op === "remove") {
-          if (mask[idx]) {
-            changeRecorder?.(maskData, idx, mask[idx]);
-            mask[idx] = 0;
-            if (maskData.alphaMask && idx < maskData.alphaMask.length) maskData.alphaMask[idx] = 0;
-            changed += 1;
-            noteChangedCell(gx, gy);
+    if (toFiniteNumber(opts.brushSizePx, DEFAULT_WATER_OPTIONS.brushSizePx) <= gridStep) {
+      applyCell(centerGX, centerGY);
+    } else {
+
+      for (let gy = centerGY - radiusCells; gy <= centerGY + radiusCells; gy += 1) {
+        if (gy < 0 || gy >= rows) continue;
+        for (let gx = centerGX - radiusCells; gx <= centerGX + radiusCells; gx += 1) {
+          if (gx < 0 || gx >= cols) continue;
+          const px = (gx + 0.5) * gridStep;
+          const py = (gy + 0.5) * gridStep;
+          const dx = Math.max(0, Math.abs(px - imgPoint.x) - (gridStep * 0.5));
+          const dy = Math.max(0, Math.abs(py - imgPoint.y) - (gridStep * 0.5));
+          if (((dx * dx) + (dy * dy)) > radiusSq) continue;
+          applyCell(gx, gy);
           }
-        } else {
-          if (!mask[idx]) {
-            changeRecorder?.(maskData, idx, mask[idx]);
-            mask[idx] = 1;
-            if (maskData.alphaMask && idx < maskData.alphaMask.length) maskData.alphaMask[idx] = 255;
-            changed += 1;
-            noteChangedCell(gx, gy);
-          }
-        }
       }
     }
 
