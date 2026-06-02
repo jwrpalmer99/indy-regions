@@ -148,6 +148,9 @@ export function applyRegionShapeToMask(maskData, shape, {
         }
 
         mask[idx] = targetValue;
+        if (maskData.alphaMask && idx < maskData.alphaMask.length) {
+          maskData.alphaMask[idx] = targetValue ? 255 : 0;
+        }
         changed++;
 
         if (x < minCX) minCX = x;

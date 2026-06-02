@@ -63,6 +63,23 @@
   justify-content: flex-end;
 }
 
+.indy-regions-paint-dialog .indy-cleanup-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  grid-template-columns: none;
+  max-width: 17rem;
+}
+
+.indy-regions-paint-dialog .indy-cleanup-row button {
+  flex: 1 1 6rem;
+  min-width: 0;
+}
+
+.indy-regions-paint-dialog .indy-cleanup-button {
+  font-size: small;
+}
+
 .indy-regions-paint-dialog .indy-checkbox-row {
   display: flex;
 }

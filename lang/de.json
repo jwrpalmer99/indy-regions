@@ -1,7 +1,9 @@
 {
   "indy-regions": {
     "Controls": {
-      "PaintRegion": "Region malen"
+      "PaintRegion": "Region malen",
+      "MergeRegions": "Merge Regions",
+      "SplitRegions": "Split Regions"
     },
     "Settings": {
       "DebugTimings": {
@@ -23,6 +25,14 @@
       "PaintInputDebounce": {
         "Name": "Debounce fuer Mal-Eingaben",
         "Hint": "Verzoegerung in Millisekunden, bevor Regionsgrenzen nach Zahlen-, Kontrollkaestchen- oder Auswahl-Aenderungen neu berechnet werden."
+      },
+      "PaintTinyIslandArea": {
+        "Name": "Paint Tiny Island Area",
+        "Hint": "Maximum island area, in image pixels, removed by the Remove Tiny Islands button."
+      },
+      "PaintTinyHoleArea": {
+        "Name": "Paint Tiny Hole Area",
+        "Hint": "Maximum hole area, in image pixels, filled by the Remove Tiny Holes button."
       }
     },
     "Dialog": {
@@ -54,7 +64,8 @@
         "ShrinkGrow": "Schrumpfen / Wachsen",
         "BorderSmooth": "Randglaettung",
         "BorderThickness": "Randstaerke",
-        "BorderSmoothType": "Randglaettungstyp"
+        "BorderSmoothType": "Randglaettungstyp",
+        "Cleanup": "Cleanup"
       },
       "Hint": {
         "PaintOpacity": "0 transparent, 1 deckend.",
@@ -77,7 +88,9 @@
         "Redo": "Wiederholen",
         "CreateRegion": "Region erstellen",
         "UpdateRegion": "Region aktualisieren",
-        "Cancel": "Abbrechen"
+        "Cancel": "Abbrechen",
+        "RemoveTinyIslands": "Remove Islands",
+        "RemoveTinyHoles": "Remove Holes"
       },
       "BorderSmoothType": {
         "Catmull": "Catmull-Rom",
@@ -93,7 +106,17 @@
       "PaintAreaFirst": "Indy Regions | Male zuerst einen Bereich.",
       "NoSourceShape": "Indy Regions | Unter dem Mauszeiger liegt keine Quellregionsform.",
       "PaintingSelectedRegion": "Indy Regions | Ausgewaehlte Region wird bemalt. Linke Maustaste fuegt hinzu, Umschalt-links entfernt.",
-      "PaintRegion": "Indy Regions | Region malen. Linke Maustaste fuegt hinzu, Umschalt-links entfernt."
+      "PaintRegion": "Indy Regions | Region malen. Linke Maustaste fuegt hinzu, Umschalt-links entfernt.",
+      "NoTinyIslands": "Indy Regions | No tiny islands found.",
+      "NoTinyHoles": "Indy Regions | No tiny holes found.",
+      "SplitCreated": "Indy Regions | Split into regions:",
+      "SelectMultipleRegionsToMerge": "Indy Regions | Select at least two Regions to merge.",
+      "NoRegionShapesToMerge": "Indy Regions | Selected Regions have no shapes to merge.",
+      "MergedRegions": "Indy Regions | Merged Regions:",
+      "MergeRegionsFailed": "Indy Regions | Failed to merge selected Regions.",
+      "SelectRegionsToSplit": "Indy Regions | Select at least one Region to split.",
+      "NoRegionsToSplit": "Indy Regions | Selected Regions do not contain multiple solid shapes.",
+      "SplitRegionsFailed": "Indy Regions | Failed to split selected Regions."
     }
   }
 }

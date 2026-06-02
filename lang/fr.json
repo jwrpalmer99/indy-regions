@@ -1,7 +1,9 @@
 {
   "indy-regions": {
     "Controls": {
-      "PaintRegion": "Peindre une région"
+      "PaintRegion": "Peindre une région",
+      "MergeRegions": "Merge Regions",
+      "SplitRegions": "Split Regions"
     },
     "Settings": {
       "DebugTimings": {
@@ -23,6 +25,14 @@
       "PaintInputDebounce": {
         "Name": "Delai des entrees de peinture",
         "Hint": "Delai en millisecondes avant de recalculer les limites de region apres modification des nombres, cases ou selecteurs."
+      },
+      "PaintTinyIslandArea": {
+        "Name": "Paint Tiny Island Area",
+        "Hint": "Maximum island area, in image pixels, removed by the Remove Tiny Islands button."
+      },
+      "PaintTinyHoleArea": {
+        "Name": "Paint Tiny Hole Area",
+        "Hint": "Maximum hole area, in image pixels, filled by the Remove Tiny Holes button."
       }
     },
     "Dialog": {
@@ -54,7 +64,8 @@
         "ShrinkGrow": "Réduire / agrandir",
         "BorderSmooth": "Lissage du bord",
         "BorderThickness": "Épaisseur du bord",
-        "BorderSmoothType": "Type de lissage du bord"
+        "BorderSmoothType": "Type de lissage du bord",
+        "Cleanup": "Cleanup"
       },
       "Hint": {
         "PaintOpacity": "0 transparent, 1 opaque.",
@@ -77,7 +88,9 @@
         "Redo": "Rétablir",
         "CreateRegion": "Créer la région",
         "UpdateRegion": "Mettre à jour la région",
-        "Cancel": "Annuler"
+        "Cancel": "Annuler",
+        "RemoveTinyIslands": "Remove Islands",
+        "RemoveTinyHoles": "Remove Holes"
       },
       "BorderSmoothType": {
         "Catmull": "Catmull-Rom",
@@ -93,7 +106,17 @@
       "PaintAreaFirst": "Indy Regions | Peignez d'abord une zone.",
       "NoSourceShape": "Indy Regions | Aucune forme de région source sous le curseur.",
       "PaintingSelectedRegion": "Indy Regions | Peinture de la région sélectionnée. Clic gauche ajoute, Maj-clic gauche soustrait.",
-      "PaintRegion": "Indy Regions | Peindre une région. Clic gauche ajoute, Maj-clic gauche soustrait."
+      "PaintRegion": "Indy Regions | Peindre une région. Clic gauche ajoute, Maj-clic gauche soustrait.",
+      "NoTinyIslands": "Indy Regions | No tiny islands found.",
+      "NoTinyHoles": "Indy Regions | No tiny holes found.",
+      "SplitCreated": "Indy Regions | Split into regions:",
+      "SelectMultipleRegionsToMerge": "Indy Regions | Select at least two Regions to merge.",
+      "NoRegionShapesToMerge": "Indy Regions | Selected Regions have no shapes to merge.",
+      "MergedRegions": "Indy Regions | Merged Regions:",
+      "MergeRegionsFailed": "Indy Regions | Failed to merge selected Regions.",
+      "SelectRegionsToSplit": "Indy Regions | Select at least one Region to split.",
+      "NoRegionsToSplit": "Indy Regions | Selected Regions do not contain multiple solid shapes.",
+      "SplitRegionsFailed": "Indy Regions | Failed to split selected Regions."
     }
   }
 }

@@ -1,9 +1,13 @@
 import {
   CARDINAL_DIRECTIONS,
+  DEFAULT_TINY_HOLE_AREA_PX,
+  DEFAULT_TINY_ISLAND_AREA_PX,
   DEFAULT_WATER_OPTIONS,
   MIN_HOLE_LOOP_AREA_CELLS,
   PAINT_REGION_DEFAULT_NAME,
   SMALL_MORPH_RADIUS_CELLS,
+  TINY_HOLE_AREA_SETTING,
+  TINY_ISLAND_AREA_SETTING,
 } from "./region-painter-constants.js";
 import { renderPaintSessionDialog as renderPaintSessionDialogController } from "./region-painter-dialog-controller.js";
 import {
@@ -50,6 +54,7 @@ import {
   expandMaskBounds,
   maskFullCols,
   maskFullRows,
+  mergeMaskBounds,
   maskOffsetX,
   maskOffsetY,
   normalizeMaskBounds,
@@ -1042,9 +1047,9 @@ function stampBrushOnMask(maskData, sceneX, sceneY, mode = "add", options = {}, 
     if (imgPoint.x < 0 || imgPoint.x >= imgW || imgPoint.y < 0 || imgPoint.y >= imgH) return 0;
 
     const radiusPx = Math.max(0.5, toFiniteNumber(opts.brushSizePx, DEFAULT_WATER_OPTIONS.brushSizePx) * 0.5);
-    const radiusCells = Math.max(1, Math.ceil(radiusPx / gridStep));
-    const centerGX = Math.round(imgPoint.x / gridStep);
-    const centerGY = Math.round(imgPoint.y / gridStep);
+    const radiusCells = Math.max(1, Math.ceil((radiusPx + (gridStep * 0.5)) / gridStep));
+    const centerGX = Math.floor(imgPoint.x / gridStep);
+    const centerGY = Math.floor(imgPoint.y / gridStep);
     const radiusSq = radiusPx * radiusPx;
     const op = String(mode ?? "add").trim().toLowerCase();
     let changed = 0;
@@ -1065,14 +1070,15 @@ function stampBrushOnMask(maskData, sceneX, sceneY, mode = "add", options = {}, 
         if (gx < 0 || gx >= cols) continue;
         const px = (gx + 0.5) * gridStep;
         const py = (gy + 0.5) * gridStep;
-        const dx = px - imgPoint.x;
-        const dy = py - imgPoint.y;
+        const dx = Math.max(0, Math.abs(px - imgPoint.x) - (gridStep * 0.5));
+        const dy = Math.max(0, Math.abs(py - imgPoint.y) - (gridStep * 0.5));
         if (((dx * dx) + (dy * dy)) > radiusSq) continue;
         const idx = gy * cols + gx;
         if (op === "subtract" || op === "remove") {
           if (mask[idx]) {
             changeRecorder?.(maskData, idx, mask[idx]);
             mask[idx] = 0;
+            if (maskData.alphaMask && idx < maskData.alphaMask.length) maskData.alphaMask[idx] = 0;
             changed += 1;
             noteChangedCell(gx, gy);
           }
@@ -1080,6 +1086,7 @@ function stampBrushOnMask(maskData, sceneX, sceneY, mode = "add", options = {}, 
           if (!mask[idx]) {
             changeRecorder?.(maskData, idx, mask[idx]);
             mask[idx] = 1;
+            if (maskData.alphaMask && idx < maskData.alphaMask.length) maskData.alphaMask[idx] = 255;
             changed += 1;
             noteChangedCell(gx, gy);
           }
@@ -1226,10 +1233,12 @@ function applySparseFloodFillToMask(maskData, sceneX, sceneY, mode = "add", opti
         if (!mask[idx]) return;
         changeRecorder?.(maskData, idx, mask[idx]);
         mask[idx] = 0;
+        if (maskData.alphaMask && idx < maskData.alphaMask.length) maskData.alphaMask[idx] = 0;
       } else {
         if (mask[idx]) return;
         changeRecorder?.(maskData, idx, mask[idx]);
         mask[idx] = 1;
+        if (maskData.alphaMask && idx < maskData.alphaMask.length) maskData.alphaMask[idx] = 255;
       }
       changed += 1;
       noteChangedCell(gx, gy);
@@ -1517,6 +1526,180 @@ function applyRegionShapeToMask(maskData, shape, mode = "add", changeRecorder = 
       changeRecorder,
       invalidateMaskDerivedData: (data, opts) => invalidateMaskDerivedData(data, opts),
     });
+  }
+
+function componentTouchesBounds(component, bounds) {
+    return Boolean(component
+      && bounds
+      && (component.minX <= bounds.minX
+        || component.minY <= bounds.minY
+        || component.maxX >= bounds.maxX
+        || component.maxY >= bounds.maxY));
+  }
+
+function getCleanupAreaLimitCells(maskData, setting, fallbackPx) {
+    const gridStep = Math.max(1, Number(maskData?.gridStep) || 1);
+    let areaPx = Number(fallbackPx) || 1;
+    try {
+      const settingValue = Number(game?.settings?.get?.(painterState.moduleId, setting));
+      if (Number.isFinite(settingValue) && settingValue > 0) areaPx = settingValue;
+    } catch (_err) {
+      // Settings are unavailable in tests and early startup.
+    }
+    return Math.max(1, Math.ceil(areaPx / (gridStep * gridStep)));
+  }
+
+function setComponentRuns(maskData, component, value, recorder = null) {
+    const { mask, cols, rows } = maskData ?? {};
+    if (!mask || !component?.runs?.length) return { changed: 0, bounds: null };
+    const nextValue = value ? 1 : 0;
+    let changed = 0;
+    let bounds = null;
+    for (const run of component.runs) {
+      const y = Math.max(0, Math.min(rows - 1, Math.round(Number(run.y))));
+      const x1 = Math.max(0, Math.min(cols - 1, Math.round(Number(run.x1))));
+      const x2 = Math.max(0, Math.min(cols - 1, Math.round(Number(run.x2))));
+      const rowOffset = y * cols;
+      let runChanged = false;
+      for (let x = x1; x <= x2; x += 1) {
+        const idx = rowOffset + x;
+        if ((mask[idx] ? 1 : 0) === nextValue) continue;
+        recorder?.record?.(maskData, idx, mask[idx]);
+        mask[idx] = nextValue;
+        if (maskData.alphaMask && idx < maskData.alphaMask.length) maskData.alphaMask[idx] = nextValue ? 255 : 0;
+        changed += 1;
+        runChanged = true;
+      }
+      if (runChanged) {
+        bounds = expandMaskBounds(bounds, x1, y, cols, rows);
+        bounds = expandMaskBounds(bounds, x2, y, cols, rows);
+      }
+    }
+    return { changed, bounds };
+  }
+
+function removeTinyIslandsFromMask(maskData, maxCells = 1, recorder = null) {
+    const { mask, cols, rows } = maskData ?? {};
+    const bounds = getMaskBounds(maskData);
+    if (!mask || !cols || !rows || !bounds) return { changed: 0, bounds: null, components: 0 };
+    const components = findMaskComponentsScanline(mask, cols, rows, bounds);
+    let changed = 0;
+    let changedBounds = null;
+    let removedComponents = 0;
+    for (const component of components) {
+      if (component.length > maxCells) continue;
+      const result = setComponentRuns(maskData, component, 0, recorder);
+      if (!result.changed) continue;
+      removedComponents += 1;
+      changed += result.changed;
+      changedBounds = mergeMaskBounds(changedBounds, result.bounds, cols, rows);
+    }
+    if (changed > 0) {
+      setLastChangedBounds(maskData, changedBounds);
+      invalidateMaskDerivedData(maskData, { boundsDirty: true });
+    }
+    return { changed, bounds: changedBounds, components: removedComponents };
+  }
+
+function fillTinyHolesFromMask(maskData, maxCells = 1, recorder = null) {
+    const { mask, cols, rows } = maskData ?? {};
+    const bounds = getMaskBounds(maskData);
+    const scanBounds = expandBoundsByRadius(bounds, 1, cols, rows);
+    if (!mask || !cols || !rows || !bounds || !scanBounds) return { changed: 0, bounds: null, components: 0 };
+    const tempCols = scanBounds.width;
+    const tempRows = scanBounds.height;
+    const inverted = new Uint8Array(tempCols * tempRows);
+    for (let y = scanBounds.minY; y <= scanBounds.maxY; y += 1) {
+      const sourceRow = y * cols;
+      const tempRow = (y - scanBounds.minY) * tempCols;
+      for (let x = scanBounds.minX; x <= scanBounds.maxX; x += 1) {
+        if (!mask[sourceRow + x]) inverted[tempRow + (x - scanBounds.minX)] = 1;
+      }
+    }
+
+    const tempBounds = { minX: 0, minY: 0, maxX: tempCols - 1, maxY: tempRows - 1, width: tempCols, height: tempRows };
+    const holes = findMaskComponentsScanline(inverted, tempCols, tempRows, tempBounds);
+    let changed = 0;
+    let changedBounds = null;
+    let filledComponents = 0;
+    for (const component of holes) {
+      if (component.length > maxCells || componentTouchesBounds(component, tempBounds)) continue;
+      const translated = {
+        ...component,
+        runs: component.runs.map((run) => ({
+          ...run,
+          x1: run.x1 + scanBounds.minX,
+          x2: run.x2 + scanBounds.minX,
+          y: run.y + scanBounds.minY,
+        })),
+      };
+      const result = setComponentRuns(maskData, translated, 1, recorder);
+      if (!result.changed) continue;
+      filledComponents += 1;
+      changed += result.changed;
+      changedBounds = mergeMaskBounds(changedBounds, result.bounds, cols, rows);
+    }
+    if (changed > 0) {
+      setLastChangedBounds(maskData, changedBounds);
+      maskData.bounds = mergeMaskBounds(maskData.bounds, changedBounds, cols, rows);
+      maskData.boundsDirty = false;
+      invalidateMaskDerivedData(maskData);
+    }
+    return { changed, bounds: changedBounds, components: filledComponents };
+  }
+
+async function applyPaintMaskCleanup(session, action, notificationKey, notificationFallback, debugData = {}) {
+    if (!session?.maskData?.mask || typeof action !== "function") return;
+    const recorder = createPaintDeltaRecorder(session, { preferSnapshot: true });
+    const start = nowMs();
+    const result = action(session.maskData, recorder) ?? { changed: 0, bounds: null, components: 0 };
+    if (!result.changed) {
+      debugTiming(painterState.moduleId, "paint-mask-cleanup", {
+        ...debugData,
+        changedCells: 0,
+        components: result.components ?? 0,
+        bounds: null,
+        totalMs: roundTimingMs(nowMs() - start),
+      });
+      ui?.notifications?.info?.(localizeText(painterState.moduleId, notificationKey, notificationFallback));
+      return;
+    }
+    session.sourceMaskData = resampleMaskData(session.maskData, 1) ?? cloneMaskData(session.maskData);
+    session.paintPreviewDirtyBounds = result.bounds;
+    pushPaintUndoSnapshot(session, finalizePaintDelta(recorder));
+    session.clearRedo();
+    setPaintMaskPreview(session);
+    await refreshPaintCandidate(session, { forceCandidate: true });
+    updatePaintSessionStatus(session);
+    debugTiming(painterState.moduleId, "paint-mask-cleanup", {
+      ...debugData,
+      changedCells: result.changed,
+      components: result.components,
+      bounds: result.bounds,
+      totalMs: roundTimingMs(nowMs() - start),
+    });
+  }
+
+function removeTinyIslands(session) {
+    const maxCells = getCleanupAreaLimitCells(session?.maskData, TINY_ISLAND_AREA_SETTING, DEFAULT_TINY_ISLAND_AREA_PX);
+    return applyPaintMaskCleanup(
+      session,
+      (maskData, recorder) => removeTinyIslandsFromMask(maskData, maxCells, recorder),
+      "Notifications.NoTinyIslands",
+      "Indy Regions | No tiny islands found.",
+      { action: "remove-tiny-islands", maxCells },
+    );
+  }
+
+function removeTinyHoles(session) {
+    const maxCells = getCleanupAreaLimitCells(session?.maskData, TINY_HOLE_AREA_SETTING, DEFAULT_TINY_HOLE_AREA_PX);
+    return applyPaintMaskCleanup(
+      session,
+      (maskData, recorder) => fillTinyHolesFromMask(maskData, maxCells, recorder),
+      "Notifications.NoTinyHoles",
+      "Indy Regions | No tiny holes found.",
+      { action: "remove-tiny-holes", maxCells },
+    );
   }
 
 function applyFillToMask(maskData, sceneX, sceneY, mode = "add", options = {}, { buildCandidate = true, changeRecorder = null } = {}) {
@@ -1849,6 +2032,8 @@ async function renderPaintSessionDialog(session) {
       updateStatus: (paintSession) => updatePaintSessionStatus(paintSession),
       undo: (paintSession) => undoPaintSession(paintSession),
       redo: (paintSession) => redoPaintSession(paintSession),
+      removeTinyIslands: (paintSession) => removeTinyIslands(paintSession),
+      removeTinyHoles: (paintSession) => removeTinyHoles(paintSession),
       saveMaskFlag: async (region, paintSession, options) => {
         await savePaintMaskFlag(region, paintSession, options);
       },

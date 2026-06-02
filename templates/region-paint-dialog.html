@@ -24,6 +24,14 @@
   </div>
 
   <div class="indy-form-row">
+    <label>{{labels.cleanup}}</label>
+    <div class="indy-form-fields indy-cleanup-row">
+      <button type="button" class="indy-cleanup-button" data-paint-action="remove-tiny-islands"><i class="fas fa-broom"></i> {{buttons.removeTinyIslands}}</button>
+      <button type="button" class="indy-cleanup-button" data-paint-action="remove-tiny-holes"><i class="fas fa-circle-dot"></i> {{buttons.removeTinyHoles}}</button>
+    </div>
+  </div>
+
+  <div class="indy-form-row">
     <label>{{labels.penColour}}</label>
     <div class="indy-form-fields">
       <input type="color" name="paintColor" value="{{values.paintColor}}">

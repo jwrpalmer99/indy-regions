@@ -61,6 +61,8 @@ export async function renderPaintSessionDialog(session, {
   updateStatus = null,
   undo = null,
   redo = null,
+  removeTinyIslands = null,
+  removeTinyHoles = null,
   saveMaskFlag = null,
   endSession = null,
   candidateShapesToRegionData = null,
@@ -102,6 +104,7 @@ export async function renderPaintSessionDialog(session, {
     labels: {
       status: t("Dialog.Label.Status", "Status"),
       history: t("Dialog.Label.History", "History"),
+      cleanup: t("Dialog.Label.Cleanup", "Cleanup"),
       penColour: t("Dialog.Label.PenColour", "Pen Colour"),
       paintOpacity: t("Dialog.Label.PaintOpacity", "Paint Opacity"),
       brushSize: t("Dialog.Label.BrushSize", "Brush Size"),
@@ -123,6 +126,8 @@ export async function renderPaintSessionDialog(session, {
     buttons: {
       undo: t("Dialog.Button.Undo", "Undo"),
       redo: t("Dialog.Button.Redo", "Redo"),
+      removeTinyIslands: t("Dialog.Button.RemoveTinyIslands", "Remove Islands"),
+      removeTinyHoles: t("Dialog.Button.RemoveTinyHoles", "Remove Holes"),
     },
     hints: {
       paintOpacity: t("Dialog.Hint.PaintOpacity", "0 transparent, 1 opaque."),
@@ -286,6 +291,8 @@ export async function renderPaintSessionDialog(session, {
       const action = button.dataset.paintAction;
       if (action === "undo") undo?.(session);
       if (action === "redo") redo?.(session);
+      if (action === "remove-tiny-islands") void removeTinyIslands?.(session);
+      if (action === "remove-tiny-holes") void removeTinyHoles?.(session);
     });
     session.addDomListener(session.root, "input", onInput);
     session.addDomListener(session.root, "change", onInput);

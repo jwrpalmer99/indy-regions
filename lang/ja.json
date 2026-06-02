@@ -1,7 +1,9 @@
 {
   "indy-regions": {
     "Controls": {
-      "PaintRegion": "リージョンをペイント"
+      "PaintRegion": "リージョンをペイント",
+      "MergeRegions": "Merge Regions",
+      "SplitRegions": "Split Regions"
     },
     "Settings": {
       "DebugTimings": {
@@ -23,6 +25,14 @@
       "PaintInputDebounce": {
         "Name": "?????????",
         "Hint": "????????????????????????????????????????????????"
+      },
+      "PaintTinyIslandArea": {
+        "Name": "Paint Tiny Island Area",
+        "Hint": "Maximum island area, in image pixels, removed by the Remove Tiny Islands button."
+      },
+      "PaintTinyHoleArea": {
+        "Name": "Paint Tiny Hole Area",
+        "Hint": "Maximum hole area, in image pixels, filled by the Remove Tiny Holes button."
       }
     },
     "Dialog": {
@@ -54,7 +64,8 @@
         "ShrinkGrow": "縮小 / 拡張",
         "BorderSmooth": "境界の滑らかさ",
         "BorderThickness": "境界の太さ",
-        "BorderSmoothType": "境界スムーズ方式"
+        "BorderSmoothType": "境界スムーズ方式",
+        "Cleanup": "Cleanup"
       },
       "Hint": {
         "PaintOpacity": "0 は透明、1 は不透明です。",
@@ -77,7 +88,9 @@
         "Redo": "やり直し",
         "CreateRegion": "リージョンを作成",
         "UpdateRegion": "リージョンを更新",
-        "Cancel": "キャンセル"
+        "Cancel": "キャンセル",
+        "RemoveTinyIslands": "Remove Islands",
+        "RemoveTinyHoles": "Remove Holes"
       },
       "BorderSmoothType": {
         "Catmull": "Catmull-Rom",
@@ -93,7 +106,17 @@
       "PaintAreaFirst": "Indy Regions | 先に領域をペイントしてください。",
       "NoSourceShape": "Indy Regions | カーソル下に元リージョン形状がありません。",
       "PaintingSelectedRegion": "Indy Regions | 選択中のリージョンをペイント中です。左クリックで追加、Shift+左クリックで減算します。",
-      "PaintRegion": "Indy Regions | リージョンをペイントします。左クリックで追加、Shift+左クリックで減算します。"
+      "PaintRegion": "Indy Regions | リージョンをペイントします。左クリックで追加、Shift+左クリックで減算します。",
+      "NoTinyIslands": "Indy Regions | No tiny islands found.",
+      "NoTinyHoles": "Indy Regions | No tiny holes found.",
+      "SplitCreated": "Indy Regions | Split into regions:",
+      "SelectMultipleRegionsToMerge": "Indy Regions | Select at least two Regions to merge.",
+      "NoRegionShapesToMerge": "Indy Regions | Selected Regions have no shapes to merge.",
+      "MergedRegions": "Indy Regions | Merged Regions:",
+      "MergeRegionsFailed": "Indy Regions | Failed to merge selected Regions.",
+      "SelectRegionsToSplit": "Indy Regions | Select at least one Region to split.",
+      "NoRegionsToSplit": "Indy Regions | Selected Regions do not contain multiple solid shapes.",
+      "SplitRegionsFailed": "Indy Regions | Failed to split selected Regions."
     }
   }
 }

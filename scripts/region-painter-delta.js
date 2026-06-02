@@ -153,6 +153,9 @@ export function applyMaskDelta(maskData, delta, {
     inverse.indexes[i] = index;
     inverse.values[i] = maskData.mask[index] ? 1 : 0;
     maskData.mask[index] = delta.values[i] ? 1 : 0;
+    if (maskData.alphaMask && index < maskData.alphaMask.length) {
+      maskData.alphaMask[index] = maskData.mask[index] ? 255 : 0;
+    }
   }
   maskData.bounds = delta.bounds ? { ...delta.bounds } : null;
   maskData.boundsDirty = delta.boundsDirty === true;
