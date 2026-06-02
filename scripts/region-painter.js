@@ -2,7 +2,7 @@ import {
   CARDINAL_DIRECTIONS,
   DEFAULT_TINY_HOLE_AREA_PX,
   DEFAULT_TINY_ISLAND_AREA_PX,
-  DEFAULT_WATER_OPTIONS,
+  DEFAULT_PAINT_OPTIONS,
   MIN_HOLE_LOOP_AREA_CELLS,
   PAINT_REGION_DEFAULT_NAME,
   SMALL_MORPH_RADIUS_CELLS,
@@ -199,7 +199,7 @@ function candidateFromMaskWorker(maskData, options = {}) {
   const requestId = ++candidateWorkerRequestId;
   const opts = normalizeOptions(options);
   const workerOptions = {
-    smoothing: toFiniteNumber(opts.smoothing, DEFAULT_WATER_OPTIONS.smoothing),
+    smoothing: toFiniteNumber(opts.smoothing, DEFAULT_PAINT_OPTIONS.smoothing),
     borderSmoothType: normalizeBorderSmoothType(opts.borderSmoothType),
     fillHoles: opts.fillHoles === true,
   };
@@ -658,8 +658,8 @@ function setCachedMorphMask(maskData, morphKey, candidateMaskData) {
 function candidateFromMaskWithOptions(maskData, options = {}) {
     const totalStart = nowMs();
     const opts = normalizeOptions(options);
-    const gridStep = Math.max(1, Number(maskData?.gridStep) || DEFAULT_WATER_OPTIONS.gridStep);
-    const offsetPx = toFiniteNumber(opts.featherShrinkPx, DEFAULT_WATER_OPTIONS.featherShrinkPx);
+    const gridStep = Math.max(1, Number(maskData?.gridStep) || DEFAULT_PAINT_OPTIONS.gridStep);
+    const offsetPx = toFiniteNumber(opts.featherShrinkPx, DEFAULT_PAINT_OPTIONS.featherShrinkPx);
     const radiusCells = Math.floor(Math.abs(offsetPx) / gridStep);
     const morphStart = nowMs();
     const morphKey = radiusCells <= 0 ? "none" : `${offsetPx > 0 ? "grow" : "shrink"}:${radiusCells}`;
@@ -719,8 +719,8 @@ function candidateFromMaskWithOptions(maskData, options = {}) {
 async function candidateFromMaskWithOptionsAsync(maskData, options = {}, { useWorker = false } = {}) {
     const totalStart = nowMs();
     const opts = normalizeOptions(options);
-    const gridStep = Math.max(1, Number(maskData?.gridStep) || DEFAULT_WATER_OPTIONS.gridStep);
-    const offsetPx = toFiniteNumber(opts.featherShrinkPx, DEFAULT_WATER_OPTIONS.featherShrinkPx);
+    const gridStep = Math.max(1, Number(maskData?.gridStep) || DEFAULT_PAINT_OPTIONS.gridStep);
+    const offsetPx = toFiniteNumber(opts.featherShrinkPx, DEFAULT_PAINT_OPTIONS.featherShrinkPx);
     const radiusCells = Math.floor(Math.abs(offsetPx) / gridStep);
     const morphStart = nowMs();
     const morphKey = radiusCells <= 0 ? "none" : `${offsetPx > 0 ? "grow" : "shrink"}:${radiusCells}`;
@@ -795,7 +795,7 @@ async function candidateFromMaskWithOptionsAsync(maskData, options = {}, { useWo
     return candidateFromMaskWithOptions(maskData, opts);
   }
 
-function candidateFromMask(maskData, smoothing = DEFAULT_WATER_OPTIONS.smoothing, { fillHoles = false, borderSmoothType = DEFAULT_WATER_OPTIONS.borderSmoothType } = {}) {
+function candidateFromMask(maskData, smoothing = DEFAULT_PAINT_OPTIONS.smoothing, { fillHoles = false, borderSmoothType = DEFAULT_PAINT_OPTIONS.borderSmoothType } = {}) {
     const totalStart = nowMs();
     const { mask, cols, rows, gridStep } = maskData ?? {};
     if (!mask || !cols || !rows || !gridStep) return null;
@@ -827,7 +827,7 @@ function candidateFromMask(maskData, smoothing = DEFAULT_WATER_OPTIONS.smoothing
       areaMs = nowMs() - areaStart;
       if (area < 3) return null;
 
-      const minShapeArea = Math.max(3, Number(DEFAULT_WATER_OPTIONS.minShapeArea) || 3);
+      const minShapeArea = Math.max(3, Number(DEFAULT_PAINT_OPTIONS.minShapeArea) || 3);
       const componentsStart = nowMs();
       const allComponents = findMaskComponentsScanline(mask, cols, rows, scanBounds);
       const components = allComponents.filter((component) => component.length >= minShapeArea);
@@ -1000,7 +1000,7 @@ function candidateFromMask(maskData, smoothing = DEFAULT_WATER_OPTIONS.smoothing
 
 function createEmptyMaskData(options = {}) {
     const opts = normalizeOptions(options);
-    const gridStep = Math.max(1, Math.round(toFiniteNumber(opts.gridStep, DEFAULT_WATER_OPTIONS.gridStep)));
+    const gridStep = Math.max(1, Math.round(toFiniteNumber(opts.gridStep, DEFAULT_PAINT_OPTIONS.gridStep)));
     const imgW = painterState.cachedImgW;
     const imgH = painterState.cachedImgH;
     const cols = Math.ceil(imgW / gridStep);
@@ -1013,11 +1013,11 @@ function createEmptyMaskData(options = {}) {
     };
   }
 
-function createMaskDataForGridStep(gridStep = DEFAULT_WATER_OPTIONS.gridStep) {
+function createMaskDataForGridStep(gridStep = DEFAULT_PAINT_OPTIONS.gridStep) {
     return createEmptyMaskData({ gridStep });
   }
 
-function resampleMaskData(source, gridStep = DEFAULT_WATER_OPTIONS.gridStep) {
+function resampleMaskData(source, gridStep = DEFAULT_PAINT_OPTIONS.gridStep) {
     if (!source?.mask || !source.cols || !source.rows || !source.gridStep) return null;
     const target = createMaskDataForGridStep(gridStep);
     const scale = target.gridStep / source.gridStep;
@@ -1044,7 +1044,7 @@ function stampBrushOnMask(maskData, sceneX, sceneY, mode = "add", options = {}, 
     const imgPoint = sceneToImagePoint(sceneX, sceneY, imgW, imgH);
     if (imgPoint.x < 0 || imgPoint.x >= imgW || imgPoint.y < 0 || imgPoint.y >= imgH) return 0;
 
-    const radiusPx = Math.max(0.5, toFiniteNumber(opts.brushSizePx, DEFAULT_WATER_OPTIONS.brushSizePx) * 0.5);
+    const radiusPx = Math.max(0.5, toFiniteNumber(opts.brushSizePx, DEFAULT_PAINT_OPTIONS.brushSizePx) * 0.5);
     const radiusCells = Math.max(1, Math.ceil((radiusPx + (gridStep * 0.5)) / gridStep));
     const centerGX = Math.floor(imgPoint.x / gridStep);
     const centerGY = Math.floor(imgPoint.y / gridStep);
@@ -1079,7 +1079,7 @@ function stampBrushOnMask(maskData, sceneX, sceneY, mode = "add", options = {}, 
       noteChangedCell(gx, gy);
     };
 
-    if (toFiniteNumber(opts.brushSizePx, DEFAULT_WATER_OPTIONS.brushSizePx) <= gridStep) {
+    if (toFiniteNumber(opts.brushSizePx, DEFAULT_PAINT_OPTIONS.brushSizePx) <= gridStep) {
       applyCell(centerGX, centerGY);
     } else {
 
@@ -1135,7 +1135,7 @@ function applySparseFloodFillToMask(maskData, sceneX, sceneY, mode = "add", opti
     const seedR = pixels[seedIdx];
     const seedG = pixels[seedIdx + 1];
     const seedB = pixels[seedIdx + 2];
-    const fillColorMode = String(opts.fillColorMode ?? DEFAULT_WATER_OPTIONS.fillColorMode).trim().toLowerCase() === "hsl"
+    const fillColorMode = String(opts.fillColorMode ?? DEFAULT_PAINT_OPTIONS.fillColorMode).trim().toLowerCase() === "hsl"
       ? "hsl"
       : "rgb";
     const seedHsl = fillColorMode === "hsl" ? rgb255ToHsl(seedR, seedG, seedB) : null;
@@ -1146,7 +1146,7 @@ function applySparseFloodFillToMask(maskData, sceneX, sceneY, mode = "add", opti
     const hueWeight = Math.pow(2, hslBias);
     const lightnessWeight = Math.pow(2, -hslBias);
     const tolSq = Math.max(0, Number(opts.tolerance) || 0) ** 2;
-    const bridgeCells = Math.max(0, Math.round(toFiniteNumber(opts.fillBridgePx, DEFAULT_WATER_OPTIONS.fillBridgePx) / gridStep));
+    const bridgeCells = Math.max(0, Math.round(toFiniteNumber(opts.fillBridgePx, DEFAULT_PAINT_OPTIONS.fillBridgePx) / gridStep));
     const offsetX = maskOffsetX(maskData);
     const offsetY = maskOffsetY(maskData);
     const seedGX = Math.floor(imgPoint.x / gridStep) - offsetX;
@@ -1455,7 +1455,7 @@ function loadPaintMaskFlag(region, options = {}) {
     });
   }
 
-function paintPreviewFromMask(maskData, color = DEFAULT_WATER_OPTIONS.paintColor, opacity = DEFAULT_WATER_OPTIONS.paintOpacity) {
+function paintPreviewFromMask(maskData, color = DEFAULT_PAINT_OPTIONS.paintColor, opacity = DEFAULT_PAINT_OPTIONS.paintOpacity) {
     return createSessionPaintPreviewFromMask(maskData, {
       color,
       opacity,
@@ -1466,7 +1466,7 @@ function paintPreviewFromMask(maskData, color = DEFAULT_WATER_OPTIONS.paintColor
     });
   }
 
-function updatePaintPreviewDirtyRect(session, dirtyBounds, color = DEFAULT_WATER_OPTIONS.paintColor, opacity = DEFAULT_WATER_OPTIONS.paintOpacity) {
+function updatePaintPreviewDirtyRect(session, dirtyBounds, color = DEFAULT_PAINT_OPTIONS.paintColor, opacity = DEFAULT_PAINT_OPTIONS.paintOpacity) {
     return updatePaintPreviewDirtyRectForSession(session, dirtyBounds, {
       color,
       opacity,
@@ -1726,7 +1726,7 @@ function readPaintSessionOptions(session) {
       opts.fillBridgePx = normalizeFillBridgePx(readNumber("fillBridgePx", opts.fillBridgePx), opts.fillBridgePx);
       opts.hslFillBias = normalizeHslFillBias(readNumber("hslFillBias", opts.hslFillBias), opts.hslFillBias);
       const fillColorModeInput = root.querySelector('[name="fillColorMode"]');
-      const fillColorMode = String(fillColorModeInput?.value ?? opts.fillColorMode ?? DEFAULT_WATER_OPTIONS.fillColorMode).trim().toLowerCase();
+      const fillColorMode = String(fillColorModeInput?.value ?? opts.fillColorMode ?? DEFAULT_PAINT_OPTIONS.fillColorMode).trim().toLowerCase();
       opts.fillColorMode = fillColorMode === "hsl" ? "hsl" : "rgb";
       opts.smoothing = readNumber("smoothing", opts.smoothing);
       const borderSmoothTypeInput = root.querySelector('[name="borderSmoothType"]');
@@ -1814,7 +1814,7 @@ async function refreshPaintCandidate(session, { forceCandidate = false, skipPrev
     session.candidateRefreshId = refreshId;
     const totalStart = nowMs();
     const opts = readPaintSessionOptions(session);
-    const borderThickness = clamp(toFiniteNumber(opts.paintBorderThickness, DEFAULT_WATER_OPTIONS.paintBorderThickness), 0, 4);
+    const borderThickness = clamp(toFiniteNumber(opts.paintBorderThickness, DEFAULT_PAINT_OPTIONS.paintBorderThickness), 0, 4);
     if (session.isPaintSession === true && borderThickness <= 0 && forceCandidate !== true) {
       session.candidate = null;
       const previewDirty = Boolean(session.paintPreviewDirtyBounds) || !session.previewSprite;
@@ -1842,7 +1842,7 @@ async function refreshPaintCandidate(session, { forceCandidate = false, skipPrev
       return;
     }
     const candidateStart = nowMs();
-    const initialBorderThickness = clamp(toFiniteNumber(opts.paintBorderThickness, DEFAULT_WATER_OPTIONS.paintBorderThickness), 0, 4);
+    const initialBorderThickness = clamp(toFiniteNumber(opts.paintBorderThickness, DEFAULT_PAINT_OPTIONS.paintBorderThickness), 0, 4);
     const nextCandidate = initialBorderThickness > 0
       ? await candidateFromMaskWithOptionsAsync(session.maskData, opts, { useWorker: session.isPaintSession === true })
       : null;
@@ -2156,7 +2156,7 @@ async function startPaintToCreate(options = {}) {
         : createEmptyMaskData(opts);
       session.sourceMaskData = resampleMaskData(session.maskData, 1) ?? cloneMaskData(session.maskData);
     }
-    const initialBorderThickness = clamp(toFiniteNumber(opts.paintBorderThickness, DEFAULT_WATER_OPTIONS.paintBorderThickness), 0, 4);
+    const initialBorderThickness = clamp(toFiniteNumber(opts.paintBorderThickness, DEFAULT_PAINT_OPTIONS.paintBorderThickness), 0, 4);
     session.candidate = initialBorderThickness > 0
       ? candidateFromMaskWithOptions(session.maskData, opts)
       : null;
@@ -2215,11 +2215,11 @@ export class RegionPainter {
     return clearCache();
   }
 
-  static candidateFromMask(maskData, smoothing = DEFAULT_WATER_OPTIONS.smoothing) {
+  static candidateFromMask(maskData, smoothing = DEFAULT_PAINT_OPTIONS.smoothing) {
     return candidateFromMask(maskData, smoothing);
   }
 
-  static paintPreviewFromMask(maskData, color = DEFAULT_WATER_OPTIONS.paintColor, opacity = DEFAULT_WATER_OPTIONS.paintOpacity) {
+  static paintPreviewFromMask(maskData, color = DEFAULT_PAINT_OPTIONS.paintColor, opacity = DEFAULT_PAINT_OPTIONS.paintOpacity) {
     return paintPreviewFromMask(maskData, color, opacity);
   }
 

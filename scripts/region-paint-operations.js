@@ -1,4 +1,4 @@
-import { DEFAULT_WATER_OPTIONS } from "./region-painter-constants.js";
+import { DEFAULT_PAINT_OPTIONS } from "./region-painter-constants.js";
 import { mergeMaskBounds } from "./region-painter-mask.js";
 import { getLastChangedBounds } from "./region-painter-mask-state.js";
 import {
@@ -151,7 +151,7 @@ export function continuePaintStroke(session, point, subtract = false, forceHardP
   paintOpts.forceHardPaint = forceHardPaint === true;
   drawBrush?.(session, point, mode, paintOpts);
   if (!session?.painting) return;
-  const brushSize = Math.max(1, toFiniteNumber(paintOpts.brushSizePx, DEFAULT_WATER_OPTIONS.brushSizePx));
+  const brushSize = Math.max(1, toFiniteNumber(paintOpts.brushSizePx, DEFAULT_PAINT_OPTIONS.brushSizePx));
   const spacing = Math.max(brushSize * 0.35, brushSize * 0.8);
   const last = session.continueStroke(point) ?? point;
   const dx = point.x - last.x;

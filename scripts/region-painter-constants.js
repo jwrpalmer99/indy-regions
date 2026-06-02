@@ -23,7 +23,7 @@ export const CARDINAL_DIRECTIONS = Object.freeze([
   [0, 1],
 ]);
 
-export const DEFAULT_WATER_OPTIONS = Object.freeze({
+export const DEFAULT_PAINT_OPTIONS = Object.freeze({
   tolerance: 28,
   gridStep: 4,
   fillColorMode: "rgb",

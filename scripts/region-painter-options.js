@@ -1,6 +1,6 @@
 import {
   BORDER_SMOOTH_TYPES,
-  DEFAULT_WATER_OPTIONS,
+  DEFAULT_PAINT_OPTIONS,
   MAX_FILL_BRIDGE_PX,
 } from "./region-painter-constants.js";
 import {
@@ -27,36 +27,36 @@ export function rgb255ToHsl(r, g, b) {
 
 export function normalizeOptions(options = {}) {
   const merged = {
-    ...DEFAULT_WATER_OPTIONS,
+    ...DEFAULT_PAINT_OPTIONS,
     ...(options && typeof options === "object" ? options : {}),
   };
-  merged.fillBridgePx = clamp(toFiniteNumber(merged.fillBridgePx, DEFAULT_WATER_OPTIONS.fillBridgePx), 0, MAX_FILL_BRIDGE_PX);
+  merged.fillBridgePx = clamp(toFiniteNumber(merged.fillBridgePx, DEFAULT_PAINT_OPTIONS.fillBridgePx), 0, MAX_FILL_BRIDGE_PX);
   merged.borderSmoothType = normalizeBorderSmoothType(merged.borderSmoothType);
   merged.fillHoles = merged.fillHoles === true;
   merged.dialogScale = normalizeDialogScale(merged.dialogScale);
   return merged;
 }
 
-export function normalizeBorderSmoothType(value, fallback = DEFAULT_WATER_OPTIONS.borderSmoothType) {
-  const raw = String(value ?? fallback ?? DEFAULT_WATER_OPTIONS.borderSmoothType).trim().toLowerCase();
+export function normalizeBorderSmoothType(value, fallback = DEFAULT_PAINT_OPTIONS.borderSmoothType) {
+  const raw = String(value ?? fallback ?? DEFAULT_PAINT_OPTIONS.borderSmoothType).trim().toLowerCase();
   if (raw === "current") return "catmull";
-  if (raw === "area") return DEFAULT_WATER_OPTIONS.borderSmoothType;
-  return BORDER_SMOOTH_TYPES.includes(raw) ? raw : DEFAULT_WATER_OPTIONS.borderSmoothType;
+  if (raw === "area") return DEFAULT_PAINT_OPTIONS.borderSmoothType;
+  return BORDER_SMOOTH_TYPES.includes(raw) ? raw : DEFAULT_PAINT_OPTIONS.borderSmoothType;
 }
 
-export function normalizeFillBridgePx(value, fallback = DEFAULT_WATER_OPTIONS.fillBridgePx) {
+export function normalizeFillBridgePx(value, fallback = DEFAULT_PAINT_OPTIONS.fillBridgePx) {
   return clamp(toFiniteNumber(value, fallback), 0, MAX_FILL_BRIDGE_PX);
 }
 
-export function normalizePaintOpacity(value, fallback = DEFAULT_WATER_OPTIONS.paintOpacity) {
+export function normalizePaintOpacity(value, fallback = DEFAULT_PAINT_OPTIONS.paintOpacity) {
   return clamp(toFiniteNumber(value, fallback), 0, 1);
 }
 
-export function normalizeDialogScale(value, fallback = DEFAULT_WATER_OPTIONS.dialogScale) {
+export function normalizeDialogScale(value, fallback = DEFAULT_PAINT_OPTIONS.dialogScale) {
   return clamp(toFiniteNumber(value, fallback), 0.75, 1.5);
 }
 
-export function normalizeHslFillBias(value, fallback = DEFAULT_WATER_OPTIONS.hslFillBias) {
+export function normalizeHslFillBias(value, fallback = DEFAULT_PAINT_OPTIONS.hslFillBias) {
   return clamp(toFiniteNumber(value, fallback), -1, 1);
 }
 
@@ -77,15 +77,15 @@ export function hexToRgbInt(value) {
 
 export function getStoredPaintColor(moduleId) {
   try {
-    return normalizeHexColor(globalThis.localStorage?.getItem?.(`${moduleId}.paintRegionPenColor`), DEFAULT_WATER_OPTIONS.paintColor);
+    return normalizeHexColor(globalThis.localStorage?.getItem?.(`${moduleId}.paintRegionPenColor`), DEFAULT_PAINT_OPTIONS.paintColor);
   } catch (_err) {
-    return DEFAULT_WATER_OPTIONS.paintColor;
+    return DEFAULT_PAINT_OPTIONS.paintColor;
   }
 }
 
 export function setStoredPaintColor(moduleId, color) {
   try {
-    globalThis.localStorage?.setItem?.(`${moduleId}.paintRegionPenColor`, normalizeHexColor(color, DEFAULT_WATER_OPTIONS.paintColor));
+    globalThis.localStorage?.setItem?.(`${moduleId}.paintRegionPenColor`, normalizeHexColor(color, DEFAULT_PAINT_OPTIONS.paintColor));
   } catch (_err) {
     // Non-fatal.
   }
@@ -104,19 +104,19 @@ export function getStoredPaintOptions(moduleId) {
 export function setStoredPaintOptions(moduleId, options = {}) {
   try {
     const stored = {
-      brushSizePx: Math.max(1, toFiniteNumber(options.brushSizePx, DEFAULT_WATER_OPTIONS.brushSizePx)),
-      tolerance: Math.max(0, toFiniteNumber(options.tolerance, DEFAULT_WATER_OPTIONS.tolerance)),
-      gridStep: Math.max(1, Math.round(toFiniteNumber(options.gridStep, DEFAULT_WATER_OPTIONS.gridStep))),
-      smoothing: Math.max(0, toFiniteNumber(options.smoothing, DEFAULT_WATER_OPTIONS.smoothing)),
+      brushSizePx: Math.max(1, toFiniteNumber(options.brushSizePx, DEFAULT_PAINT_OPTIONS.brushSizePx)),
+      tolerance: Math.max(0, toFiniteNumber(options.tolerance, DEFAULT_PAINT_OPTIONS.tolerance)),
+      gridStep: Math.max(1, Math.round(toFiniteNumber(options.gridStep, DEFAULT_PAINT_OPTIONS.gridStep))),
+      smoothing: Math.max(0, toFiniteNumber(options.smoothing, DEFAULT_PAINT_OPTIONS.smoothing)),
       borderSmoothType: normalizeBorderSmoothType(options.borderSmoothType),
-      featherShrinkPx: toFiniteNumber(options.featherShrinkPx, DEFAULT_WATER_OPTIONS.featherShrinkPx),
+      featherShrinkPx: toFiniteNumber(options.featherShrinkPx, DEFAULT_PAINT_OPTIONS.featherShrinkPx),
       fillBridgePx: normalizeFillBridgePx(options.fillBridgePx),
-      fillColorMode: String(options.fillColorMode ?? DEFAULT_WATER_OPTIONS.fillColorMode).trim().toLowerCase() === "hsl" ? "hsl" : "rgb",
-      paintColor: normalizeHexColor(options.paintColor, DEFAULT_WATER_OPTIONS.paintColor),
+      fillColorMode: String(options.fillColorMode ?? DEFAULT_PAINT_OPTIONS.fillColorMode).trim().toLowerCase() === "hsl" ? "hsl" : "rgb",
+      paintColor: normalizeHexColor(options.paintColor, DEFAULT_PAINT_OPTIONS.paintColor),
       paintOpacity: normalizePaintOpacity(options.paintOpacity),
       dialogScale: normalizeDialogScale(options.dialogScale),
       hslFillBias: normalizeHslFillBias(options.hslFillBias),
-      paintBorderThickness: clamp(toFiniteNumber(options.paintBorderThickness, DEFAULT_WATER_OPTIONS.paintBorderThickness), 0, 4),
+      paintBorderThickness: clamp(toFiniteNumber(options.paintBorderThickness, DEFAULT_PAINT_OPTIONS.paintBorderThickness), 0, 4),
       fillHoles: options.fillHoles === true,
     };
     globalThis.localStorage?.setItem?.(`${moduleId}.paintRegionOptions`, JSON.stringify(stored));

@@ -1,5 +1,5 @@
 import {
-  DEFAULT_WATER_OPTIONS,
+  DEFAULT_PAINT_OPTIONS,
   PAINT_MASK_FLAG,
 } from "./region-painter-constants.js";
 import {
@@ -33,7 +33,7 @@ import {
 
 export function buildPaintRegionDocumentAppearance(options = {}) {
   return {
-    color: normalizeHexColor(options.paintColor, DEFAULT_WATER_OPTIONS.paintColor),
+    color: normalizeHexColor(options.paintColor, DEFAULT_PAINT_OPTIONS.paintColor),
   };
 }
 
@@ -78,7 +78,7 @@ export function savePaintMaskFlag(region, session, {
     offsetY: bounds?.minY ?? 0,
     cropCols,
     cropRows,
-    color: normalizeHexColor(options.paintColor, DEFAULT_WATER_OPTIONS.paintColor),
+    color: normalizeHexColor(options.paintColor, DEFAULT_PAINT_OPTIONS.paintColor),
     alpha: bytesToBase64(alpha),
   };
   return region.setFlag(moduleId, PAINT_MASK_FLAG, flagData);

@@ -1,4 +1,4 @@
-import { DEFAULT_WATER_OPTIONS } from "./region-painter-constants.js";
+import { DEFAULT_PAINT_OPTIONS } from "./region-painter-constants.js";
 import {
   consumePaintPointerEvent,
   getDomPointerWorldPoint,
@@ -139,7 +139,7 @@ export function installPaintInputHandlers(session, {
     consumePaintPointerEvent(event);
     const opts = readOptions?.(session);
     const direction = Number(event.deltaY) < 0 ? 1 : -1;
-    const current = Math.max(1, toFiniteNumber(opts?.brushSizePx, DEFAULT_WATER_OPTIONS.brushSizePx));
+    const current = Math.max(1, toFiniteNumber(opts?.brushSizePx, DEFAULT_PAINT_OPTIONS.brushSizePx));
     const step = event.shiftKey === true ? 1 : Math.max(2, Math.round(current * 0.08));
     opts.brushSizePx = clamp(Math.round(current + (direction * step)), 1, 512);
     setDialogNumber(session, "brushSizePx", opts.brushSizePx);

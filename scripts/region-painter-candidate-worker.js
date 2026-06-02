@@ -1,5 +1,5 @@
 import {
-  DEFAULT_WATER_OPTIONS,
+  DEFAULT_PAINT_OPTIONS,
   MIN_HOLE_LOOP_AREA_CELLS,
 } from "./region-painter-constants.js";
 import {
@@ -42,7 +42,7 @@ let lastGeometryCache = null;
 function candidateFromMask(maskData, options = {}, mapping = {}) {
   const totalStart = nowMs();
   const opts = normalizeOptions(options);
-  const smoothing = Math.max(0, toFiniteNumber(opts.smoothing, DEFAULT_WATER_OPTIONS.smoothing));
+  const smoothing = Math.max(0, toFiniteNumber(opts.smoothing, DEFAULT_PAINT_OPTIONS.smoothing));
   const borderSmoothType = normalizeBorderSmoothType(opts.borderSmoothType);
   const fillHoles = opts.fillHoles === true;
   const { mask, cols, rows, gridStep } = maskData ?? {};
@@ -77,7 +77,7 @@ function candidateFromMask(maskData, options = {}, mapping = {}) {
   if (area < 3) return { candidate: null, timing: { areaMs: roundTimingMs(areaMs), totalMs: roundTimingMs(nowMs() - totalStart) } };
 
   if (!geometry) {
-    const minShapeArea = Math.max(3, Number(DEFAULT_WATER_OPTIONS.minShapeArea) || 3);
+    const minShapeArea = Math.max(3, Number(DEFAULT_PAINT_OPTIONS.minShapeArea) || 3);
     const componentsStart = nowMs();
     const allComponents = findMaskComponentsScanline(mask, cols, rows, scanBounds);
     const components = allComponents.filter((component) => component.length >= minShapeArea);

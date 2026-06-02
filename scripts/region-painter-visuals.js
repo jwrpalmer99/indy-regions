@@ -1,4 +1,4 @@
-import { DEFAULT_WATER_OPTIONS } from "./region-painter-constants.js";
+import { DEFAULT_PAINT_OPTIONS } from "./region-painter-constants.js";
 import {
   getPreviewLayer,
   getSceneImageMapping,
@@ -23,8 +23,8 @@ import {
 } from "./region-painter-utils.js";
 
 export function paintPreviewFromMask(maskData, {
-  color = DEFAULT_WATER_OPTIONS.paintColor,
-  opacity = DEFAULT_WATER_OPTIONS.paintOpacity,
+  color = DEFAULT_PAINT_OPTIONS.paintColor,
+  opacity = DEFAULT_PAINT_OPTIONS.paintOpacity,
   imgW = 0,
   imgH = 0,
   getMaskBounds = null,
@@ -41,8 +41,8 @@ export function paintPreviewFromMask(maskData, {
 }
 
 export function updatePaintPreviewDirtyRectForSession(session, dirtyBounds, {
-  color = DEFAULT_WATER_OPTIONS.paintColor,
-  opacity = DEFAULT_WATER_OPTIONS.paintOpacity,
+  color = DEFAULT_PAINT_OPTIONS.paintColor,
+  opacity = DEFAULT_PAINT_OPTIONS.paintOpacity,
   getMaskBounds = null,
   moduleId = "indy-regions",
 } = {}) {
@@ -114,7 +114,7 @@ export function drawSessionDebug(session, {
     return;
   }
   const opts = normalizeOptions(session?.options ?? {});
-  const paintBorderThickness = clamp(toFiniteNumber(opts.paintBorderThickness, DEFAULT_WATER_OPTIONS.paintBorderThickness), 0, 4);
+  const paintBorderThickness = clamp(toFiniteNumber(opts.paintBorderThickness, DEFAULT_PAINT_OPTIONS.paintBorderThickness), 0, 4);
   if (session?.isPaintSession === true && paintBorderThickness <= 0) {
     destroyGraphics(session?.debugGfx);
     if (session) session.debugGfx = null;
@@ -171,7 +171,7 @@ export function drawPaintBrush(session, point, mode = null, options = null) {
   }
 
   const opts = normalizeOptions(options ?? session.options ?? {});
-  const radius = Math.max(1, toFiniteNumber(opts.brushSizePx, DEFAULT_WATER_OPTIONS.brushSizePx)) / 2;
+  const radius = Math.max(1, toFiniteNumber(opts.brushSizePx, DEFAULT_PAINT_OPTIONS.brushSizePx)) / 2;
   const paintMode = mode ?? session.paintMode ?? "add";
   const color = paintMode === "subtract" ? 0xff6b4a : 0x35b7ff;
   session.lastBrushPoint = { x: point.x, y: point.y };

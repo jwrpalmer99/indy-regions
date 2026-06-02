@@ -1,4 +1,4 @@
-import { DEFAULT_WATER_OPTIONS } from "./region-painter-constants.js";
+import { DEFAULT_PAINT_OPTIONS } from "./region-painter-constants.js";
 import { getSceneImageMapping } from "./region-painter-foundry.js";
 import { sameMaskBounds, normalizeMaskBounds } from "./region-painter-mask.js";
 import {
@@ -81,8 +81,8 @@ function updateTileTexture(tile) {
 }
 
 export function createPaintPreviewFromMask(maskData, {
-  color = DEFAULT_WATER_OPTIONS.paintColor,
-  opacity = DEFAULT_WATER_OPTIONS.paintOpacity,
+  color = DEFAULT_PAINT_OPTIONS.paintColor,
+  opacity = DEFAULT_PAINT_OPTIONS.paintOpacity,
   imgW = 0,
   imgH = 0,
   getMaskBounds = null,
@@ -105,7 +105,7 @@ export function createPaintPreviewFromMask(maskData, {
   container.zIndex = 1000000;
   container._indyRegionsPreviewTiles = new Map();
   container._indyRegionsPreviewBounds = { ...bounds };
-  container._indyRegionsPreviewColor = normalizeHexColor(color, DEFAULT_WATER_OPTIONS.paintColor);
+  container._indyRegionsPreviewColor = normalizeHexColor(color, DEFAULT_PAINT_OPTIONS.paintColor);
   container._indyRegionsPreviewOpacity = normalizePaintOpacity(opacity);
   container._indyRegionsPreviewTileSize = PREVIEW_TILE_SIZE;
   let visibleCells = 0;
@@ -157,8 +157,8 @@ export function createPaintPreviewFromMask(maskData, {
 }
 
 export function updatePaintPreviewDirtyRect(session, dirtyBounds, {
-  color = DEFAULT_WATER_OPTIONS.paintColor,
-  opacity = DEFAULT_WATER_OPTIONS.paintOpacity,
+  color = DEFAULT_PAINT_OPTIONS.paintColor,
+  opacity = DEFAULT_PAINT_OPTIONS.paintOpacity,
   getMaskBounds = null,
   moduleId = "indy-regions",
 } = {}) {
@@ -171,7 +171,7 @@ export function updatePaintPreviewDirtyRect(session, dirtyBounds, {
   if (!sprite || !(tiles instanceof Map) || !mask || !cols || !rows || !previewBounds) return false;
   const currentBounds = getMaskBounds?.(maskData) ?? null;
   const normalizedDirty = normalizeMaskBounds(dirtyBounds, cols, rows);
-  const normalizedColor = normalizeHexColor(color, DEFAULT_WATER_OPTIONS.paintColor);
+  const normalizedColor = normalizeHexColor(color, DEFAULT_PAINT_OPTIONS.paintColor);
   const normalizedOpacity = normalizePaintOpacity(opacity);
   if (!currentBounds || !normalizedDirty) return false;
   if (!sameMaskBounds(currentBounds, previewBounds)) return false;

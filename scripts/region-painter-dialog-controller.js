@@ -1,5 +1,5 @@
 import {
-  DEFAULT_WATER_OPTIONS,
+  DEFAULT_PAINT_OPTIONS,
   GRID_STEP_DEBOUNCE_SETTING,
   INPUT_DEBOUNCE_SETTING,
   MAX_FILL_BRIDGE_PX,
@@ -146,7 +146,7 @@ export async function renderPaintSessionDialog(session, {
       dialogScale: t("Dialog.Hint.DialogScale", "Resize the paint dialog controls."),
     },
     values: {
-      paintColor: normalizeHexColor(opts.paintColor, DEFAULT_WATER_OPTIONS.paintColor),
+      paintColor: normalizeHexColor(opts.paintColor, DEFAULT_PAINT_OPTIONS.paintColor),
       paintOpacity: normalizePaintOpacity(opts.paintOpacity),
       brushSizePx: opts.brushSizePx,
       tolerance: opts.tolerance,
@@ -198,7 +198,7 @@ export async function renderPaintSessionDialog(session, {
             const created = await scene?.createEmbeddedDocuments?.("Region", [{
               name: paintRegionDefaultName,
               ...(buildDocumentAppearance?.(nextOptions) ?? {
-                color: normalizeHexColor(nextOptions.paintColor, DEFAULT_WATER_OPTIONS.paintColor),
+                color: normalizeHexColor(nextOptions.paintColor, DEFAULT_PAINT_OPTIONS.paintColor),
               }),
               shapes,
             }]);
