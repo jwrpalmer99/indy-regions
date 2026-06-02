@@ -3,6 +3,9 @@ export function cloneMaskData(maskData) {
   return {
     mask: new Uint8Array(maskData.mask),
     alphaMask: maskData.alphaMask ? new Uint8Array(maskData.alphaMask) : null,
+    rowCounts: maskData.rowCounts ? new Uint32Array(maskData.rowCounts) : null,
+    colCounts: maskData.colCounts ? new Uint32Array(maskData.colCounts) : null,
+    filledCells: Math.max(0, Math.round(Number(maskData.filledCells) || 0)),
     cols: maskData.cols,
     rows: maskData.rows,
     gridStep: maskData.gridStep,
@@ -13,6 +16,80 @@ export function cloneMaskData(maskData) {
     bounds: maskData.bounds ? { ...maskData.bounds } : null,
     boundsDirty: maskData.boundsDirty === true,
   };
+}
+
+export function boundsFromMaskOccupancy(maskData) {
+  const { rowCounts, colCounts, cols, rows } = maskData ?? {};
+  const filledCells = Math.max(0, Math.round(Number(maskData?.filledCells) || 0));
+  if (!rowCounts || !colCounts || !cols || !rows || filledCells <= 0) return null;
+  let minY = 0;
+  while (minY < rows && !rowCounts[minY]) minY += 1;
+  if (minY >= rows) return null;
+  let maxY = rows - 1;
+  while (maxY >= minY && !rowCounts[maxY]) maxY -= 1;
+  let minX = 0;
+  while (minX < cols && !colCounts[minX]) minX += 1;
+  if (minX >= cols) return null;
+  let maxX = cols - 1;
+  while (maxX >= minX && !colCounts[maxX]) maxX -= 1;
+  return normalizeMaskBounds({ minX, minY, maxX, maxY }, cols, rows);
+}
+
+export function initializeMaskOccupancy(maskData, scanBounds = null) {
+  const { mask, cols, rows } = maskData ?? {};
+  if (!mask || !cols || !rows) return null;
+  const rowCounts = new Uint32Array(rows);
+  const colCounts = new Uint32Array(cols);
+  const bounds = normalizeMaskBounds(scanBounds, cols, rows) ?? { minX: 0, minY: 0, maxX: cols - 1, maxY: rows - 1, width: cols, height: rows };
+  let filledCells = 0;
+  for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
+    const rowOffset = y * cols;
+    for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
+      if (!mask[rowOffset + x]) continue;
+      rowCounts[y] += 1;
+      colCounts[x] += 1;
+      filledCells += 1;
+    }
+  }
+  maskData.rowCounts = rowCounts;
+  maskData.colCounts = colCounts;
+  maskData.filledCells = filledCells;
+  maskData.bounds = boundsFromMaskOccupancy(maskData);
+  maskData.boundsDirty = false;
+  return maskData.bounds;
+}
+
+export function updateMaskOccupancy(maskData, x, y, previousValue, nextValue) {
+  const { cols, rows } = maskData ?? {};
+  if (!cols || !rows) return;
+  const gx = Math.max(0, Math.min(cols - 1, Math.floor(Number(x))));
+  const gy = Math.max(0, Math.min(rows - 1, Math.floor(Number(y))));
+  if (![gx, gy].every(Number.isFinite)) return;
+  const prev = previousValue ? 1 : 0;
+  const next = nextValue ? 1 : 0;
+  if (prev === next) return;
+  if (!maskData.rowCounts || !maskData.colCounts) {
+    initializeMaskOccupancy(maskData);
+    return;
+  }
+
+  if (next) {
+    maskData.rowCounts[gy] += 1;
+    maskData.colCounts[gx] += 1;
+    maskData.filledCells = Math.max(0, Math.round(Number(maskData.filledCells) || 0)) + 1;
+    maskData.bounds = expandMaskBounds(maskData.bounds, gx, gy, cols, rows);
+    maskData.boundsDirty = false;
+  } else {
+    if (maskData.rowCounts[gy] > 0) maskData.rowCounts[gy] -= 1;
+    if (maskData.colCounts[gx] > 0) maskData.colCounts[gx] -= 1;
+    maskData.filledCells = Math.max(0, Math.round(Number(maskData.filledCells) || 0) - 1);
+    if (maskData.filledCells <= 0) {
+      maskData.bounds = null;
+      maskData.boundsDirty = false;
+    } else {
+      maskData.boundsDirty = true;
+    }
+  }
 }
 
 export function clonePaintSnapshot(session, fallback = null) {

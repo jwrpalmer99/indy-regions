@@ -6,6 +6,7 @@ import {
 import {
   expandMaskBounds,
   mergeMaskBounds,
+  updateMaskOccupancy,
 } from "./region-painter-mask.js";
 import { setLastChangedBounds } from "./region-painter-mask-state.js";
 import { normalizeOptions } from "./region-painter-options.js";
@@ -147,6 +148,7 @@ export function applyRegionShapeToMask(maskData, shape, {
         }
 
         mask[idx] = targetValue;
+        updateMaskOccupancy(maskData, x, y, currentVal, targetValue);
         if (maskData.alphaMask && idx < maskData.alphaMask.length) {
           maskData.alphaMask[idx] = targetValue ? 255 : 0;
         }

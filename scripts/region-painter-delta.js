@@ -1,3 +1,8 @@
+import {
+  initializeMaskOccupancy,
+  updateMaskOccupancy,
+} from "./region-painter-mask.js";
+
 const MAX_DELTA_CELLS = 100_000;
 
 export function maskDeltaMetadata(maskData) {
@@ -30,7 +35,9 @@ export function snapshotMaskBeforeDelta(maskData, delta) {
       if (index < mask.length) mask[index] = value ? 1 : 0;
     }
   }
-  return { ...meta, mask };
+  const snapshot = { ...meta, mask };
+  initializeMaskOccupancy(snapshot, snapshot.bounds);
+  return snapshot;
 }
 
 export function createPaintDeltaRecorder(session, {
@@ -151,8 +158,11 @@ export function applyMaskDelta(maskData, delta, {
     const index = delta.indexes[i];
     if (index >= maskData.mask.length) continue;
     inverse.indexes[i] = index;
-    inverse.values[i] = maskData.mask[index] ? 1 : 0;
+    const previousValue = maskData.mask[index] ? 1 : 0;
+    const nextValue = delta.values[i] ? 1 : 0;
+    inverse.values[i] = previousValue;
     maskData.mask[index] = delta.values[i] ? 1 : 0;
+    updateMaskOccupancy(maskData, index % maskData.cols, Math.floor(index / maskData.cols), previousValue, nextValue);
     if (maskData.alphaMask && index < maskData.alphaMask.length) {
       maskData.alphaMask[index] = maskData.mask[index] ? 255 : 0;
     }

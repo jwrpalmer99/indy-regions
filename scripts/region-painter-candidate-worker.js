@@ -198,7 +198,7 @@ function candidateFromMask(maskData, options = {}, mapping = {}) {
       points: shapes[0].points,
       shapes,
       area,
-      componentCount: components.length,
+      componentCount: geometry.componentCount,
       shapeCount: shapes.length,
       centroid: {
         x: cx / Math.max(1, pointCount),

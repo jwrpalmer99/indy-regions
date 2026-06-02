@@ -33,6 +33,7 @@ export function normalizeOptions(options = {}) {
   merged.fillBridgePx = clamp(toFiniteNumber(merged.fillBridgePx, DEFAULT_PAINT_OPTIONS.fillBridgePx), 0, MAX_FILL_BRIDGE_PX);
   merged.borderSmoothType = normalizeBorderSmoothType(merged.borderSmoothType);
   merged.fillHoles = merged.fillHoles === true;
+  merged.progressiveFill = merged.progressiveFill === true;
   merged.dialogScale = normalizeDialogScale(merged.dialogScale);
   return merged;
 }
@@ -116,6 +117,7 @@ export function setStoredPaintOptions(moduleId, options = {}) {
       paintOpacity: normalizePaintOpacity(options.paintOpacity),
       dialogScale: normalizeDialogScale(options.dialogScale),
       hslFillBias: normalizeHslFillBias(options.hslFillBias),
+      progressiveFill: options.progressiveFill === true,
       paintBorderThickness: clamp(toFiniteNumber(options.paintBorderThickness, DEFAULT_PAINT_OPTIONS.paintBorderThickness), 0, 4),
       fillHoles: options.fillHoles === true,
     };

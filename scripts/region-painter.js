@@ -50,18 +50,22 @@ import {
 } from "./region-painter-geometry.js";
 import {
   cloneMaskData,
+  boundsFromMaskOccupancy,
   expandMaskBounds,
+  initializeMaskOccupancy,
   maskFullCols,
   maskFullRows,
   mergeMaskBounds,
   maskOffsetX,
   maskOffsetY,
   normalizeMaskBounds,
+  updateMaskOccupancy,
 } from "./region-painter-mask.js";
 import {
   clearMaskDerivedState,
   getDistanceCache,
   getGeometryCache,
+  getMaskRuntimeId,
   getMaskRevision,
   getMorphCache,
   getMorphTiming,
@@ -313,9 +317,15 @@ async function ensureImageCache() {
 
 function getMaskBounds(maskData) {
     if (!maskData?.mask) return null;
+    if (maskData.rowCounts && maskData.colCounts && (maskData.boundsDirty === true || !maskData.bounds)) {
+      maskData.bounds = boundsFromMaskOccupancy(maskData);
+      maskData.boundsDirty = false;
+      return maskData.bounds;
+    }
     if (maskData.boundsDirty === true || !maskData.bounds) {
       maskData.bounds = computeMaskBounds(maskData);
       maskData.boundsDirty = false;
+      initializeMaskOccupancy(maskData, maskData.bounds);
     }
     return normalizeMaskBounds(maskData.bounds, maskData.cols, maskData.rows);
   }
@@ -395,6 +405,208 @@ function smallRadiusDilateMaskData(maskData, radius) {
     };
   }
 
+function buildMaskRowRunStats(maskData, bounds, { minY = bounds?.minY, maxY = bounds?.maxY } = {}) {
+    const { mask, cols, rows } = maskData ?? {};
+    if (!mask || !cols || !rows || !bounds) return null;
+    const rowRuns = new Map();
+    let runCount = 0;
+    let filledCells = 0;
+    const y1 = Math.max(0, Math.floor(Number(minY)));
+    const y2 = Math.min(rows - 1, Math.ceil(Number(maxY)));
+    for (let y = y1; y <= y2; y += 1) {
+      const runs = [];
+      const rowOffset = y * cols;
+      let x = bounds.minX;
+      while (x <= bounds.maxX) {
+        while (x <= bounds.maxX && !mask[rowOffset + x]) x += 1;
+        if (x > bounds.maxX) break;
+        const x1 = x;
+        while (x <= bounds.maxX && mask[rowOffset + x]) x += 1;
+        const x2 = x - 1;
+        runs.push({ x1, x2 });
+        runCount += 1;
+        filledCells += (x2 - x1) + 1;
+      }
+      if (runs.length) rowRuns.set(y, runs);
+    }
+    return { rowRuns, runCount, filledCells };
+  }
+
+function getRunMorphDecision(maskData, bounds, radius, mode) {
+    const { cols, rows } = maskData ?? {};
+    if (!cols || !rows || !bounds || radius <= 0) {
+      return { algorithm: "distance", mode, radius, reason: "invalid" };
+    }
+    const rowPadding = mode === "erode" ? radius : 0;
+    const stats = buildMaskRowRunStats(maskData, bounds, {
+      minY: bounds.minY - rowPadding,
+      maxY: bounds.maxY + rowPadding,
+    });
+    if (!stats || stats.runCount <= 0) {
+      return { algorithm: "distance", mode, radius, reason: "no-runs" };
+    }
+    const scanBounds = expandBoundsByRadius(bounds, radius, cols, rows) ?? bounds;
+    const distanceWork = scanBounds.width * scanBounds.height;
+    const runWork = stats.runCount * ((radius * 2) + 1);
+    const workMultiplier = mode === "erode" ? 1.5 : 2;
+    const maxRunRadius = 64;
+    const threshold = distanceWork * workMultiplier;
+    const useRun = radius <= maxRunRadius && runWork <= threshold;
+    return {
+      algorithm: useRun ? "run" : "distance",
+      mode,
+      radius,
+      runCount: stats.runCount,
+      filledCells: stats.filledCells,
+      runWork,
+      distanceWork,
+      threshold,
+      workMultiplier,
+      maxRunRadius,
+      reason: radius > maxRunRadius ? "radius" : (runWork > threshold ? "work" : "run"),
+    };
+  }
+
+function runDilateMaskData(maskData, radius) {
+    const { mask, cols, rows, gridStep } = maskData ?? {};
+    const bounds = getMaskBounds(maskData);
+    const scanBounds = expandBoundsByRadius(bounds, radius, cols, rows);
+    if (!mask || !cols || !rows || !gridStep || !bounds || !scanBounds) return null;
+    const stats = buildMaskRowRunStats(maskData, bounds);
+    if (!stats) return null;
+
+    const width = scanBounds.width;
+    const out = new Uint8Array(width * scanBounds.height);
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    const markSpan = (y, x1, x2) => {
+      const yy = y - scanBounds.minY;
+      const left = Math.max(scanBounds.minX, x1);
+      const right = Math.min(scanBounds.maxX, x2);
+      if (right < left) return;
+      out.fill(1, (yy * width) + (left - scanBounds.minX), (yy * width) + (right - scanBounds.minX) + 1);
+      if (left < minX) minX = left;
+      if (right > maxX) maxX = right;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    };
+
+    for (const [y, runs] of stats.rowRuns) {
+      for (const run of runs) {
+        for (let dy = -radius; dy <= radius; dy += 1) {
+          const yy = y + dy;
+          if (yy < scanBounds.minY || yy > scanBounds.maxY) continue;
+          const remaining = radius - Math.abs(dy);
+          markSpan(yy, run.x1 - remaining, run.x2 + remaining);
+        }
+      }
+    }
+
+    if (!Number.isFinite(minX)) return emptyDerivedMaskData(maskData);
+    const dilatedBounds = normalizeMaskBounds({ minX, minY, maxX, maxY }, cols, rows);
+    if (!dilatedBounds) return emptyDerivedMaskData(maskData);
+
+    const dilated = new Uint8Array(dilatedBounds.width * dilatedBounds.height);
+    for (let y = dilatedBounds.minY; y <= dilatedBounds.maxY; y += 1) {
+      const sourceRow = (y - scanBounds.minY) * width;
+      const targetRow = (y - dilatedBounds.minY) * dilatedBounds.width;
+      dilated.set(
+        out.subarray(sourceRow + (dilatedBounds.minX - scanBounds.minX), sourceRow + (dilatedBounds.maxX - scanBounds.minX) + 1),
+        targetRow,
+      );
+    }
+
+    return {
+      mask: dilated,
+      cols: dilatedBounds.width,
+      rows: dilatedBounds.height,
+      gridStep,
+      offsetX: maskOffsetX(maskData) + dilatedBounds.minX,
+      offsetY: maskOffsetY(maskData) + dilatedBounds.minY,
+      fullCols: maskFullCols(maskData),
+      fullRows: maskFullRows(maskData),
+      bounds: { minX: 0, minY: 0, maxX: dilatedBounds.width - 1, maxY: dilatedBounds.height - 1, width: dilatedBounds.width, height: dilatedBounds.height },
+    };
+  }
+
+function distanceDilateMaskData(maskData, radius, bounds, decision = null) {
+    const { mask, cols, rows, gridStep } = maskData ?? {};
+    const cacheKey = `dilate:${bounds.minX},${bounds.minY},${bounds.maxX},${bounds.maxY}`;
+    let distanceCache = getDistanceCache(maskData);
+    let scanBounds = null;
+    let distToFilled = null;
+    if (distanceCache?.key === cacheKey && distanceCache.radius >= radius) {
+      scanBounds = distanceCache.scanBounds;
+      distToFilled = distanceCache.dist;
+      setMorphTiming(maskData, { distanceCacheHit: true, morphFastPath: false, decision });
+    } else {
+      setMorphTiming(maskData, { distanceCacheHit: false, morphFastPath: false, decision });
+      scanBounds = expandBoundsByRadius(bounds, radius, cols, rows) ?? bounds;
+      const width = scanBounds.width;
+      const height = scanBounds.height;
+      const inf = 0x3fffffff;
+      distToFilled = new Int32Array(width * height);
+      for (let y = 0; y < height; y += 1) {
+        const sourceY = scanBounds.minY + y;
+        const sourceRow = sourceY * cols;
+        const row = y * width;
+        for (let x = 0; x < width; x += 1) {
+          const sourceX = scanBounds.minX + x;
+          distToFilled[row + x] = mask[sourceRow + sourceX] ? 0 : inf;
+        }
+      }
+      l1DistanceTransform(distToFilled, width, height);
+      setDistanceCache(maskData, { key: cacheKey, mode: "dilate", radius, scanBounds, dist: distToFilled });
+    }
+    const width = scanBounds.width;
+    const height = scanBounds.height;
+
+    let dilatedBounds = null;
+    for (let y = 0; y < height; y += 1) {
+      const sourceY = scanBounds.minY + y;
+      const row = y * width;
+      for (let x = 0; x < width; x += 1) {
+        if (distToFilled[row + x] > radius) continue;
+        const sourceX = scanBounds.minX + x;
+        dilatedBounds = expandMaskBounds(dilatedBounds, sourceX, sourceY, cols, rows);
+      }
+    }
+    if (!dilatedBounds) return {
+      mask: new Uint8Array(0),
+      cols: 0,
+      rows: 0,
+      gridStep,
+      offsetX: maskOffsetX(maskData),
+      offsetY: maskOffsetY(maskData),
+      fullCols: maskFullCols(maskData),
+      fullRows: maskFullRows(maskData),
+      bounds: null,
+    };
+    const dilated = new Uint8Array(dilatedBounds.width * dilatedBounds.height);
+    for (let y = dilatedBounds.minY; y <= dilatedBounds.maxY; y += 1) {
+      const row = (y - scanBounds.minY) * width;
+      for (let x = dilatedBounds.minX; x <= dilatedBounds.maxX; x += 1) {
+        if (distToFilled[row + (x - scanBounds.minX)] > radius) continue;
+        dilated[(y - dilatedBounds.minY) * dilatedBounds.width + (x - dilatedBounds.minX)] = 1;
+      }
+    }
+
+    return {
+      mask: dilated,
+      cols: dilatedBounds.width,
+      rows: dilatedBounds.height,
+      gridStep,
+      offsetX: maskOffsetX(maskData) + dilatedBounds.minX,
+      offsetY: maskOffsetY(maskData) + dilatedBounds.minY,
+      fullCols: maskFullCols(maskData),
+      fullRows: maskFullRows(maskData),
+      bounds: { minX: 0, minY: 0, maxX: dilatedBounds.width - 1, maxY: dilatedBounds.height - 1, width: dilatedBounds.width, height: dilatedBounds.height },
+    };
+  }
+
 function smallRadiusErodeMaskData(maskData, radius) {
     const { mask, cols, rows, gridStep } = maskData ?? {};
     const bounds = getMaskBounds(maskData);
@@ -448,17 +660,91 @@ function smallRadiusErodeMaskData(maskData, radius) {
     };
   }
 
-function erodeMaskData(maskData, radiusCells = 0) {
-    const { mask, cols, rows, gridStep } = maskData ?? {};
-    const radius = Math.max(0, Math.round(Number(radiusCells) || 0));
-    if (!mask || !cols || !rows || !gridStep || radius <= 0) return maskData;
-    const bounds = getMaskBounds(maskData);
-    if (!bounds) return { mask: new Uint8Array(mask.length), cols, rows, gridStep, bounds: null };
-    if (radius <= SMALL_MORPH_RADIUS_CELLS) {
-      setMorphTiming(maskData, { distanceCacheHit: false, morphFastPath: true });
-      return smallRadiusErodeMaskData(maskData, radius);
+function intersectSpans(leftSpans, rightSpans) {
+    if (!leftSpans?.length || !rightSpans?.length) return [];
+    const out = [];
+    let i = 0;
+    let j = 0;
+    while (i < leftSpans.length && j < rightSpans.length) {
+      const left = leftSpans[i];
+      const right = rightSpans[j];
+      const x1 = Math.max(left.x1, right.x1);
+      const x2 = Math.min(left.x2, right.x2);
+      if (x1 <= x2) out.push({ x1, x2 });
+      if (left.x2 < right.x2) i += 1;
+      else j += 1;
     }
-    setMorphTiming(maskData, { distanceCacheHit: false, morphFastPath: false });
+    return out;
+  }
+
+function runErodeMaskData(maskData, radius) {
+    const { mask, cols, rows, gridStep } = maskData ?? {};
+    const bounds = getMaskBounds(maskData);
+    if (!mask || !cols || !rows || !gridStep || !bounds) return null;
+
+    const stats = buildMaskRowRunStats(maskData, bounds, { minY: bounds.minY - radius, maxY: bounds.maxY + radius });
+    if (!stats) return null;
+
+    const erodedRows = [];
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
+      let spans = null;
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= rows) {
+          spans = [];
+          break;
+        }
+        const remaining = radius - Math.abs(dy);
+        const rowSpans = (stats.rowRuns.get(yy) ?? [])
+          .map((run) => ({ x1: run.x1 + remaining, x2: run.x2 - remaining }))
+          .filter((span) => span.x1 <= span.x2);
+        spans = spans === null ? rowSpans : intersectSpans(spans, rowSpans);
+        if (!spans.length) break;
+      }
+      if (!spans?.length) continue;
+      erodedRows.push({ y, spans });
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+      for (const span of spans) {
+        if (span.x1 < minX) minX = span.x1;
+        if (span.x2 > maxX) maxX = span.x2;
+      }
+    }
+
+    if (!Number.isFinite(minX)) return emptyDerivedMaskData(maskData);
+    const erodedBounds = normalizeMaskBounds({ minX, minY, maxX, maxY }, cols, rows);
+    if (!erodedBounds) return emptyDerivedMaskData(maskData);
+
+    const eroded = new Uint8Array(erodedBounds.width * erodedBounds.height);
+    for (const row of erodedRows) {
+      const targetRow = (row.y - erodedBounds.minY) * erodedBounds.width;
+      for (const span of row.spans) {
+        const left = Math.max(erodedBounds.minX, span.x1);
+        const right = Math.min(erodedBounds.maxX, span.x2);
+        if (right < left) continue;
+        eroded.fill(1, targetRow + (left - erodedBounds.minX), targetRow + (right - erodedBounds.minX) + 1);
+      }
+    }
+
+    return {
+      mask: eroded,
+      cols: erodedBounds.width,
+      rows: erodedBounds.height,
+      gridStep,
+      offsetX: maskOffsetX(maskData) + erodedBounds.minX,
+      offsetY: maskOffsetY(maskData) + erodedBounds.minY,
+      fullCols: maskFullCols(maskData),
+      fullRows: maskFullRows(maskData),
+      bounds: { minX: 0, minY: 0, maxX: erodedBounds.width - 1, maxY: erodedBounds.height - 1, width: erodedBounds.width, height: erodedBounds.height },
+    };
+  }
+
+function distanceErodeMaskData(maskData, radius, bounds, decision = null) {
+    const { mask, cols, rows, gridStep } = maskData ?? {};
     const cacheKey = `erode:${bounds.minX},${bounds.minY},${bounds.maxX},${bounds.maxY}`;
     let distanceCache = getDistanceCache(maskData);
     let scanBounds = null;
@@ -466,9 +752,9 @@ function erodeMaskData(maskData, radiusCells = 0) {
     if (distanceCache?.key === cacheKey && distanceCache.radius >= radius) {
       scanBounds = distanceCache.scanBounds;
       distToEmpty = distanceCache.dist;
-      setMorphTiming(maskData, { distanceCacheHit: true, morphFastPath: false });
+      setMorphTiming(maskData, { distanceCacheHit: true, morphFastPath: false, decision });
     } else {
-      setMorphTiming(maskData, { distanceCacheHit: false, morphFastPath: false });
+      setMorphTiming(maskData, { distanceCacheHit: false, morphFastPath: false, decision });
       scanBounds = expandBoundsByRadius(bounds, radius, cols, rows) ?? bounds;
       const width = scanBounds.width;
       const height = scanBounds.height;
@@ -537,6 +823,29 @@ function erodeMaskData(maskData, radiusCells = 0) {
     };
   }
 
+function erodeMaskData(maskData, radiusCells = 0) {
+    const { mask, cols, rows, gridStep } = maskData ?? {};
+    const radius = Math.max(0, Math.round(Number(radiusCells) || 0));
+    if (!mask || !cols || !rows || !gridStep || radius <= 0) return maskData;
+    const bounds = getMaskBounds(maskData);
+    if (!bounds) return { mask: new Uint8Array(mask.length), cols, rows, gridStep, bounds: null };
+    if (radius <= SMALL_MORPH_RADIUS_CELLS) {
+      setMorphTiming(maskData, {
+        distanceCacheHit: false,
+        morphFastPath: true,
+        decision: { algorithm: "small", mode: "erode", radius, maxSmallRadius: SMALL_MORPH_RADIUS_CELLS },
+      });
+      return smallRadiusErodeMaskData(maskData, radius);
+    }
+    const decision = getRunMorphDecision(maskData, bounds, radius, "erode");
+    if (decision.algorithm === "run") {
+      setMorphTiming(maskData, { distanceCacheHit: false, morphFastPath: true, decision });
+      return runErodeMaskData(maskData, radius);
+    }
+    setMorphTiming(maskData, { distanceCacheHit: false, morphFastPath: false, decision });
+    return distanceErodeMaskData(maskData, radius, bounds, decision);
+  }
+
 function dilateMaskData(maskData, radiusCells = 0) {
     const { mask, cols, rows, gridStep } = maskData ?? {};
     const radius = Math.max(0, Math.round(Number(radiusCells) || 0));
@@ -544,86 +853,26 @@ function dilateMaskData(maskData, radiusCells = 0) {
     const bounds = getMaskBounds(maskData);
     if (!bounds) return { mask: new Uint8Array(mask.length), cols, rows, gridStep, bounds: null };
     if (radius <= SMALL_MORPH_RADIUS_CELLS) {
-      setMorphTiming(maskData, { distanceCacheHit: false, morphFastPath: true });
+      setMorphTiming(maskData, {
+        distanceCacheHit: false,
+        morphFastPath: true,
+        decision: { algorithm: "small", mode: "dilate", radius, maxSmallRadius: SMALL_MORPH_RADIUS_CELLS },
+      });
       return smallRadiusDilateMaskData(maskData, radius);
     }
-    setMorphTiming(maskData, { distanceCacheHit: false, morphFastPath: false });
-    const cacheKey = `dilate:${bounds.minX},${bounds.minY},${bounds.maxX},${bounds.maxY}`;
-    let distanceCache = getDistanceCache(maskData);
-    let scanBounds = null;
-    let distToFilled = null;
-    if (distanceCache?.key === cacheKey && distanceCache.radius >= radius) {
-      scanBounds = distanceCache.scanBounds;
-      distToFilled = distanceCache.dist;
-      setMorphTiming(maskData, { distanceCacheHit: true, morphFastPath: false });
-    } else {
-      setMorphTiming(maskData, { distanceCacheHit: false, morphFastPath: false });
-      scanBounds = expandBoundsByRadius(bounds, radius, cols, rows) ?? bounds;
-      const width = scanBounds.width;
-      const height = scanBounds.height;
-      const inf = 0x3fffffff;
-      distToFilled = new Int32Array(width * height);
-      for (let y = 0; y < height; y += 1) {
-        const sourceY = scanBounds.minY + y;
-        const sourceRow = sourceY * cols;
-        const row = y * width;
-        for (let x = 0; x < width; x += 1) {
-          const sourceX = scanBounds.minX + x;
-          distToFilled[row + x] = mask[sourceRow + sourceX] ? 0 : inf;
-        }
-      }
-      l1DistanceTransform(distToFilled, width, height);
-      setDistanceCache(maskData, { key: cacheKey, mode: "dilate", radius, scanBounds, dist: distToFilled });
+    const decision = getRunMorphDecision(maskData, bounds, radius, "dilate");
+    if (decision.algorithm === "run") {
+      setMorphTiming(maskData, { distanceCacheHit: false, morphFastPath: true, decision });
+      return runDilateMaskData(maskData, radius);
     }
-    const width = scanBounds.width;
-    const height = scanBounds.height;
-
-    let dilatedBounds = null;
-    for (let y = 0; y < height; y += 1) {
-      const sourceY = scanBounds.minY + y;
-      const row = y * width;
-      for (let x = 0; x < width; x += 1) {
-        if (distToFilled[row + x] > radius) continue;
-        const sourceX = scanBounds.minX + x;
-        dilatedBounds = expandMaskBounds(dilatedBounds, sourceX, sourceY, cols, rows);
-      }
-    }
-    if (!dilatedBounds) return {
-      mask: new Uint8Array(0),
-      cols: 0,
-      rows: 0,
-      gridStep,
-      offsetX: maskOffsetX(maskData),
-      offsetY: maskOffsetY(maskData),
-      fullCols: maskFullCols(maskData),
-      fullRows: maskFullRows(maskData),
-      bounds: null,
-    };
-    const dilated = new Uint8Array(dilatedBounds.width * dilatedBounds.height);
-    for (let y = dilatedBounds.minY; y <= dilatedBounds.maxY; y += 1) {
-      const row = (y - scanBounds.minY) * width;
-      for (let x = dilatedBounds.minX; x <= dilatedBounds.maxX; x += 1) {
-        if (distToFilled[row + (x - scanBounds.minX)] > radius) continue;
-        dilated[(y - dilatedBounds.minY) * dilatedBounds.width + (x - dilatedBounds.minX)] = 1;
-      }
-    }
-
-    return {
-      mask: dilated,
-      cols: dilatedBounds.width,
-      rows: dilatedBounds.height,
-      gridStep,
-      offsetX: maskOffsetX(maskData) + dilatedBounds.minX,
-      offsetY: maskOffsetY(maskData) + dilatedBounds.minY,
-      fullCols: maskFullCols(maskData),
-      fullRows: maskFullRows(maskData),
-      bounds: { minX: 0, minY: 0, maxX: dilatedBounds.width - 1, maxY: dilatedBounds.height - 1, width: dilatedBounds.width, height: dilatedBounds.height },
-    };
+    setMorphTiming(maskData, { distanceCacheHit: false, morphFastPath: false, decision });
+    return distanceDilateMaskData(maskData, radius, bounds, decision);
   }
 
 function getMaskCandidateCacheKey(maskData, morphKey = "none") {
     const bounds = getMaskBounds(maskData);
     return [
+      getMaskRuntimeId(maskData),
       getMaskRevision(maskData),
       morphKey,
       maskData?.cols ?? 0,
@@ -638,6 +887,20 @@ function getMaskCandidateCacheKey(maskData, morphKey = "none") {
       bounds?.maxX ?? -1,
       bounds?.maxY ?? -1,
     ].join(":");
+  }
+
+function getRefreshCandidateCacheKey(maskData, opts, borderThickness) {
+    const gridStep = Math.max(1, Number(maskData?.gridStep) || DEFAULT_PAINT_OPTIONS.gridStep);
+    const offsetPx = toFiniteNumber(opts?.featherShrinkPx, DEFAULT_PAINT_OPTIONS.featherShrinkPx);
+    const radiusCells = Math.floor(Math.abs(offsetPx) / gridStep);
+    const morphKey = radiusCells <= 0 ? "none" : `${offsetPx > 0 ? "grow" : "shrink"}:${radiusCells}`;
+    return [
+      getMaskCandidateCacheKey(maskData, morphKey),
+      normalizeBorderSmoothType(opts?.borderSmoothType),
+      toFiniteNumber(opts?.smoothing, DEFAULT_PAINT_OPTIONS.smoothing),
+      opts?.fillHoles === true ? 1 : 0,
+      clamp(toFiniteNumber(borderThickness, DEFAULT_PAINT_OPTIONS.paintBorderThickness), 0, 4),
+    ].join("|");
   }
 
 function getCachedMorphMask(maskData, morphKey) {
@@ -666,11 +929,22 @@ function candidateFromMaskWithOptions(maskData, options = {}) {
     let candidateMaskData = maskData;
     let morphCacheHit = false;
     const morphTiming = [];
-    if (radiusCells > 0) {
+    if (radiusCells <= 0) {
+      setMorphTiming(maskData, {
+        distanceCacheHit: false,
+        morphFastPath: false,
+        decision: { algorithm: "none", mode: "none", radius: 0 },
+      });
+    } else {
       const cachedMorph = getCachedMorphMask(maskData, morphKey);
       if (cachedMorph) {
         candidateMaskData = cachedMorph;
         morphCacheHit = true;
+        setMorphTiming(maskData, {
+          distanceCacheHit: false,
+          morphFastPath: true,
+          decision: { algorithm: "cache", mode: offsetPx > 0 ? "dilate" : "erode", radius: radiusCells },
+        });
       } else {
         const passStart = nowMs();
         candidateMaskData = offsetPx > 0
@@ -688,6 +962,7 @@ function candidateFromMaskWithOptions(maskData, options = {}) {
     }
     if (candidateMaskData) candidateMaskData.cacheKey = getMaskCandidateCacheKey(maskData, morphKey);
     const morphMs = nowMs() - morphStart;
+    const morphInfo = getMorphTiming(maskData);
     const candidate = candidateFromMask(candidateMaskData, opts.smoothing, { fillHoles: opts.fillHoles, borderSmoothType: opts.borderSmoothType });
     let fallbackCandidate = null;
     if (!candidate && offsetPx < 0 && radiusCells > 0) {
@@ -704,8 +979,9 @@ function candidateFromMaskWithOptions(maskData, options = {}) {
       radiusCells,
       morphTiming,
       morphCacheHit,
-      distanceCacheHit: getMorphTiming(maskData).distanceCacheHit,
-      morphFastPath: getMorphTiming(maskData).morphFastPath,
+      distanceCacheHit: morphInfo.distanceCacheHit,
+      morphFastPath: morphInfo.morphFastPath,
+      morphDecision: morphInfo.morphDecision,
       morphMs: roundTimingMs(morphMs),
       totalMs: roundTimingMs(nowMs() - totalStart),
       hadCandidate: Boolean(result),
@@ -727,11 +1003,22 @@ async function candidateFromMaskWithOptionsAsync(maskData, options = {}, { useWo
     let candidateMaskData = maskData;
     let morphCacheHit = false;
     const morphTiming = [];
-    if (radiusCells > 0) {
+    if (radiusCells <= 0) {
+      setMorphTiming(maskData, {
+        distanceCacheHit: false,
+        morphFastPath: false,
+        decision: { algorithm: "none", mode: "none", radius: 0 },
+      });
+    } else {
       const cachedMorph = getCachedMorphMask(maskData, morphKey);
       if (cachedMorph) {
         candidateMaskData = cachedMorph;
         morphCacheHit = true;
+        setMorphTiming(maskData, {
+          distanceCacheHit: false,
+          morphFastPath: true,
+          decision: { algorithm: "cache", mode: offsetPx > 0 ? "dilate" : "erode", radius: radiusCells },
+        });
       } else {
         const passStart = nowMs();
         candidateMaskData = offsetPx > 0
@@ -749,6 +1036,7 @@ async function candidateFromMaskWithOptionsAsync(maskData, options = {}, { useWo
     }
     if (candidateMaskData) candidateMaskData.cacheKey = getMaskCandidateCacheKey(maskData, morphKey);
     const morphMs = nowMs() - morphStart;
+    const morphInfo = getMorphTiming(maskData);
     const candidateCells = (candidateMaskData?.cols ?? 0) * (candidateMaskData?.rows ?? 0);
     if (useWorker === true && candidateCells >= CANDIDATE_WORKER_MIN_CELLS) {
       try {
@@ -775,8 +1063,9 @@ async function candidateFromMaskWithOptionsAsync(maskData, options = {}, { useWo
           radiusCells,
           morphTiming,
           morphCacheHit,
-          distanceCacheHit: getMorphTiming(maskData).distanceCacheHit,
-          morphFastPath: getMorphTiming(maskData).morphFastPath,
+          distanceCacheHit: morphInfo.distanceCacheHit,
+          morphFastPath: morphInfo.morphFastPath,
+          morphDecision: morphInfo.morphDecision,
           morphMs: roundTimingMs(morphMs),
           worker: true,
           workerMs: roundTimingMs(nowMs() - workerStart),
@@ -1007,9 +1296,14 @@ function createEmptyMaskData(options = {}) {
     const rows = Math.ceil(imgH / gridStep);
     return {
       mask: new Uint8Array(cols * rows),
+      rowCounts: new Uint32Array(rows),
+      colCounts: new Uint32Array(cols),
+      filledCells: 0,
       cols,
       rows,
       gridStep,
+      bounds: null,
+      boundsDirty: false,
     };
   }
 
@@ -1029,6 +1323,7 @@ function resampleMaskData(source, gridStep = DEFAULT_PAINT_OPTIONS.gridStep) {
         const to = y * target.cols + x;
         if (!source.mask[from]) continue;
         target.mask[to] = 1;
+        updateMaskOccupancy(target, x, y, 0, 1);
         target.bounds = expandMaskBounds(target.bounds, x, y, target.cols, target.rows);
       }
     }
@@ -1068,11 +1363,13 @@ function stampBrushOnMask(maskData, sceneX, sceneY, mode = "add", options = {}, 
         if (!mask[idx]) return;
         changeRecorder?.(maskData, idx, mask[idx]);
         mask[idx] = 0;
+        updateMaskOccupancy(maskData, gx, gy, 1, 0);
         if (maskData.alphaMask && idx < maskData.alphaMask.length) maskData.alphaMask[idx] = 0;
       } else {
         if (mask[idx]) return;
         changeRecorder?.(maskData, idx, mask[idx]);
         mask[idx] = 1;
+        updateMaskOccupancy(maskData, gx, gy, 0, 1);
         if (maskData.alphaMask && idx < maskData.alphaMask.length) maskData.alphaMask[idx] = 255;
       }
       changed += 1;
@@ -1147,6 +1444,7 @@ function applySparseFloodFillToMask(maskData, sceneX, sceneY, mode = "add", opti
     const lightnessWeight = Math.pow(2, -hslBias);
     const tolSq = Math.max(0, Number(opts.tolerance) || 0) ** 2;
     const bridgeCells = Math.max(0, Math.round(toFiniteNumber(opts.fillBridgePx, DEFAULT_PAINT_OPTIONS.fillBridgePx) / gridStep));
+    const progressiveFill = opts.progressiveFill === true;
     const offsetX = maskOffsetX(maskData);
     const offsetY = maskOffsetY(maskData);
     const seedGX = Math.floor(imgPoint.x / gridStep) - offsetX;
@@ -1212,6 +1510,34 @@ function applySparseFloodFillToMask(maskData, sceneX, sceneY, mode = "add", opti
       return matches;
     };
 
+    const colorMatchesReference = (gx, gy, refGx, refGy) => {
+      const fullX = gx + offsetX;
+      const fullY = gy + offsetY;
+      const refFullX = refGx + offsetX;
+      const refFullY = refGy + offsetY;
+      if (fullX < 0 || fullX >= fullCols || fullY < 0 || fullY >= fullRows) return false;
+      if (refFullX < 0 || refFullX >= fullCols || refFullY < 0 || refFullY >= fullRows) return false;
+      const px = Math.min(fullX * gridStep, imgW - 1);
+      const py = Math.min(fullY * gridStep, imgH - 1);
+      const refPx = Math.min(refFullX * gridStep, imgW - 1);
+      const refPy = Math.min(refFullY * gridStep, imgH - 1);
+      const idx = (py * imgW + px) * 4;
+      const refIdx = (refPy * imgW + refPx) * 4;
+      if (fillColorMode === "hsl") {
+        const current = rgb255ToHsl(pixels[idx], pixels[idx + 1], pixels[idx + 2]);
+        const reference = rgb255ToHsl(pixels[refIdx], pixels[refIdx + 1], pixels[refIdx + 2]);
+        const dhRaw = Math.abs(current.h - reference.h);
+        const dh = Math.min(dhRaw, 1 - dhRaw) * 255;
+        const ds = (current.s - reference.s) * 255;
+        const dl = (current.l - reference.l) * 255;
+        return ((dh * dh * hueWeight) + (ds * ds) + (dl * dl * lightnessWeight)) <= tolSq;
+      }
+      const dr = pixels[idx] - pixels[refIdx];
+      const dg = pixels[idx + 1] - pixels[refIdx + 1];
+      const db = pixels[idx + 2] - pixels[refIdx + 2];
+      return ((dr * dr) + (dg * dg) + (db * db)) <= tolSq;
+    };
+
     const op = String(mode ?? "add").trim().toLowerCase();
     let changed = 0;
     let visited = 0;
@@ -1231,11 +1557,13 @@ function applySparseFloodFillToMask(maskData, sceneX, sceneY, mode = "add", opti
         if (!mask[idx]) return;
         changeRecorder?.(maskData, idx, mask[idx]);
         mask[idx] = 0;
+        updateMaskOccupancy(maskData, gx, gy, 1, 0);
         if (maskData.alphaMask && idx < maskData.alphaMask.length) maskData.alphaMask[idx] = 0;
       } else {
         if (mask[idx]) return;
         changeRecorder?.(maskData, idx, mask[idx]);
         mask[idx] = 1;
+        updateMaskOccupancy(maskData, gx, gy, 0, 1);
         if (maskData.alphaMask && idx < maskData.alphaMask.length) maskData.alphaMask[idx] = 255;
       }
       changed += 1;
@@ -1249,7 +1577,7 @@ function applySparseFloodFillToMask(maskData, sceneX, sceneY, mode = "add", opti
     let visitedSet = null;
     let bestGap = null;
     let bestGapBytes = null;
-    if (bridgeCells > 0) {
+    if (bridgeCells > 0 && progressiveFill !== true) {
       try {
         bestGapBytes = new Uint8Array(cellCount);
         bestGapBytes.fill(255);
@@ -1293,6 +1621,59 @@ function applySparseFloodFillToMask(maskData, sceneX, sceneY, mode = "add", opti
       stackX.push(gx);
       stackY.push(gy);
     };
+
+    if (progressiveFill === true) {
+      const refStackX = [seedGX];
+      const refStackY = [seedGY];
+      while (stackX.length) {
+        const x = stackX.pop();
+        const y = stackY.pop();
+        const refX = refStackX.pop();
+        const refY = refStackY.pop();
+        visited += 1;
+        if (!colorMatchesReference(x, y, refX, refY)) continue;
+        applyCell(x, y);
+
+        for (const [dx, dy] of CARDINAL_DIRECTIONS) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+          const idx = ny * cols + nx;
+          if (visitedBits) {
+            const byte = idx >> 3;
+            const bit = 1 << (idx & 7);
+            if ((visitedBits[byte] & bit) !== 0) continue;
+            visitedBits[byte] |= bit;
+          } else {
+            if (visitedSet.has(idx)) continue;
+            visitedSet.add(idx);
+          }
+          stackX.push(nx);
+          stackY.push(ny);
+          refStackX.push(x);
+          refStackY.push(y);
+        }
+      }
+
+      if (changed > 0) {
+        setLastChangedBounds(maskData, normalizeMaskBounds({
+          minX: changedMinX,
+          minY: changedMinY,
+          maxX: changedMaxX,
+          maxY: changedMaxY,
+        }, cols, rows));
+        if (op === "subtract" || op === "remove") {
+          invalidateMaskDerivedData(maskData, { boundsDirty: true });
+        } else {
+          maskData.bounds = expandMaskBounds(maskData.bounds, changedMinX, changedMinY, cols, rows);
+          maskData.bounds = expandMaskBounds(maskData.bounds, changedMaxX, changedMaxY, cols, rows);
+          maskData.boundsDirty = false;
+          invalidateMaskDerivedData(maskData);
+        }
+      }
+
+      return { changed, visited };
+    }
 
     if (bridgeCells <= 0) {
       const isVisitedIndex = (idx) => {
@@ -1436,7 +1817,7 @@ function fillMaskAlpha(maskData, alpha = 255) {
         maskData.alphaMask[i] = alpha;
       }
     }
-    if (!maskData.bounds) maskData.boundsDirty = true;
+    if (!maskData.bounds && !maskData.rowCounts) maskData.boundsDirty = true;
     return maskData;
   }
 
@@ -1563,7 +1944,9 @@ function setComponentRuns(maskData, component, value, recorder = null) {
         const idx = rowOffset + x;
         if ((mask[idx] ? 1 : 0) === nextValue) continue;
         recorder?.record?.(maskData, idx, mask[idx]);
+        const previousValue = mask[idx];
         mask[idx] = nextValue;
+        updateMaskOccupancy(maskData, x, y, previousValue, nextValue);
         if (maskData.alphaMask && idx < maskData.alphaMask.length) maskData.alphaMask[idx] = nextValue ? 255 : 0;
         changed += 1;
         runChanged = true;
@@ -1742,6 +2125,8 @@ function readPaintSessionOptions(session) {
       if (session?.isPaintSession === true) opts.debug = true;
       const fillHolesInput = root.querySelector('[name="fillHoles"]');
       if (fillHolesInput instanceof HTMLInputElement) opts.fillHoles = fillHolesInput.checked === true;
+      const progressiveFillInput = root.querySelector('[name="progressiveFill"]');
+      if (progressiveFillInput instanceof HTMLInputElement) opts.progressiveFill = progressiveFillInput.checked === true;
       const colorInput = root.querySelector('[name="paintColor"]');
       if (colorInput instanceof HTMLInputElement) {
         opts.paintColor = normalizeHexColor(colorInput.value, getStoredPaintColor(painterState.moduleId));
@@ -1793,6 +2178,8 @@ function syncDialogInputsFromOptions(session) {
     }
     const fillHolesInput = root.querySelector('[name="fillHoles"]');
     if (fillHolesInput instanceof HTMLInputElement) fillHolesInput.checked = opts.fillHoles === true;
+    const progressiveFillInput = root.querySelector('[name="progressiveFill"]');
+    if (progressiveFillInput instanceof HTMLInputElement) progressiveFillInput.checked = opts.progressiveFill === true;
   }
 
 function drawSessionDebug(session) {
@@ -1843,11 +2230,16 @@ async function refreshPaintCandidate(session, { forceCandidate = false, skipPrev
     }
     const candidateStart = nowMs();
     const initialBorderThickness = clamp(toFiniteNumber(opts.paintBorderThickness, DEFAULT_PAINT_OPTIONS.paintBorderThickness), 0, 4);
-    const nextCandidate = initialBorderThickness > 0
-      ? await candidateFromMaskWithOptionsAsync(session.maskData, opts, { useWorker: session.isPaintSession === true })
-      : null;
+    const candidateCacheKey = getRefreshCandidateCacheKey(session.maskData, opts, initialBorderThickness);
+    const candidateCacheHit = session.candidateCacheKey === candidateCacheKey;
+    const nextCandidate = candidateCacheHit
+      ? (session.candidate ?? null)
+      : (initialBorderThickness > 0
+        ? await candidateFromMaskWithOptionsAsync(session.maskData, opts, { useWorker: session.isPaintSession === true })
+        : null);
     if (session.candidateRefreshId !== refreshId || session.closed === true) return;
     session.candidate = nextCandidate;
+    session.candidateCacheKey = candidateCacheKey;
     const candidateMs = nowMs() - candidateStart;
     if (session.candidate) session.candidate.maskData = session.maskData;
     const previewDirty = Boolean(session.paintPreviewDirtyBounds) || !session.previewSprite;
@@ -1865,6 +2257,7 @@ async function refreshPaintCandidate(session, { forceCandidate = false, skipPrev
       rows: session.maskData?.rows ?? 0,
       cells: (session.maskData?.cols ?? 0) * (session.maskData?.rows ?? 0),
       candidateMs: roundTimingMs(candidateMs),
+      candidateCacheHit,
       previewMs: roundTimingMs(previewMs),
       previewSkipped: skipPreviewIfClean && !previewDirty,
       debugMs: roundTimingMs(debugMs),
@@ -2156,8 +2549,9 @@ async function startPaintToCreate(options = {}) {
         : createEmptyMaskData(opts);
       session.sourceMaskData = resampleMaskData(session.maskData, 1) ?? cloneMaskData(session.maskData);
     }
+    const hasInitialRegionMask = Boolean(editRegion || storedPaintMask);
     const initialBorderThickness = clamp(toFiniteNumber(opts.paintBorderThickness, DEFAULT_PAINT_OPTIONS.paintBorderThickness), 0, 4);
-    session.candidate = initialBorderThickness > 0
+    session.candidate = hasInitialRegionMask && initialBorderThickness > 0
       ? candidateFromMaskWithOptions(session.maskData, opts)
       : null;
     if (session.candidate) session.candidate.maskData = session.maskData;
@@ -2192,7 +2586,7 @@ async function startPaintToCreate(options = {}) {
       ui?.notifications?.error?.("Indy Regions | Failed to render paint dialog.");
       endSession({ notify: false });
     });
-    if (session.candidate || getMaskBounds(session.maskData)) {
+    if (session.candidate || (hasInitialRegionMask && getMaskBounds(session.maskData))) {
       setPaintMaskPreview(session);
       drawSessionDebug(session);
       updatePaintSessionStatus(session);

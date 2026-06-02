@@ -16,6 +16,7 @@ import {
 import {
   base64ToBytes,
   bytesToBase64,
+  initializeMaskOccupancy,
   maskFullCols,
   maskFullRows,
   maskOffsetX,
@@ -121,7 +122,7 @@ export function loadPaintMaskFlag(region, {
     for (let i = 0; i < alphaMask.length; i += 1) if (alphaMask[i]) mask[i] = 1;
   }
   const maskData = { mask, cols, rows, gridStep, bounds: normalizeMaskBounds(flagData.bounds, cols, rows) };
-  if (!maskData.bounds) maskData.boundsDirty = true;
+  initializeMaskOccupancy(maskData, maskData.bounds);
   return {
     maskData,
     color: normalizeHexColor(flagData.color, opts.paintColor),

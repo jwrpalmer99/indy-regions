@@ -78,6 +78,7 @@ export async function floodFillPaintSession(session, point, subtract = false, {
     visitedCells: result.visited ?? 0,
     tolerance: opts.tolerance,
     hslFillBias: opts.hslFillBias,
+    progressiveFill: opts.progressiveFill === true,
     gridStep: session.maskData?.gridStep ?? 0,
     bounds: getMaskBounds?.(session.maskData),
   });

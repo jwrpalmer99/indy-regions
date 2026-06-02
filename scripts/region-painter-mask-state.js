@@ -1,21 +1,29 @@
 const maskRuntimeState = new WeakMap();
+let nextMaskRuntimeId = 1;
 
 export function getMaskRuntimeState(maskData) {
   if (!maskData || typeof maskData !== "object") return null;
   let state = maskRuntimeState.get(maskData);
   if (!state) {
     state = {
+      id: nextMaskRuntimeId,
       morphCache: null,
       geometryCache: null,
       distanceCache: null,
       revision: 0,
       lastDistanceCacheHit: false,
       lastMorphFastPath: false,
+      lastMorphDecision: null,
       lastChangedBounds: null,
     };
+    nextMaskRuntimeId += 1;
     maskRuntimeState.set(maskData, state);
   }
   return state;
+}
+
+export function getMaskRuntimeId(maskData) {
+  return getMaskRuntimeState(maskData)?.id ?? 0;
 }
 
 export function clearMaskDerivedState(maskData) {
@@ -58,11 +66,12 @@ export function setDistanceCache(maskData, cache) {
   if (state) state.distanceCache = cache ?? null;
 }
 
-export function setMorphTiming(maskData, { distanceCacheHit = false, morphFastPath = false } = {}) {
+export function setMorphTiming(maskData, { distanceCacheHit = false, morphFastPath = false, decision = null } = {}) {
   const state = getMaskRuntimeState(maskData);
   if (!state) return;
   state.lastDistanceCacheHit = distanceCacheHit === true;
   state.lastMorphFastPath = morphFastPath === true;
+  state.lastMorphDecision = decision ?? null;
 }
 
 export function getMorphTiming(maskData) {
@@ -70,6 +79,7 @@ export function getMorphTiming(maskData) {
   return {
     distanceCacheHit: state?.lastDistanceCacheHit === true,
     morphFastPath: state?.lastMorphFastPath === true,
+    morphDecision: state?.lastMorphDecision ?? null,
   };
 }
 

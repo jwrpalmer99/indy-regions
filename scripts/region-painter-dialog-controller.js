@@ -111,6 +111,7 @@ export async function renderPaintSessionDialog(session, {
       brushSize: t("Dialog.Label.BrushSize", "Brush Size"),
       fillTolerance: t("Dialog.Label.FillTolerance", "Fill Tolerance"),
       hslFillBias: t("Dialog.Label.HslFillBias", "HSL Fill Bias"),
+      progressiveFill: t("Dialog.Label.ProgressiveFill", "Progressive Fill"),
       hue: t("Dialog.Label.Hue", "Hue"),
       lightness: t("Dialog.Label.Lightness", "Lightness"),
       fillBridge: t("Dialog.Label.FillBridge", "Fill Bridge"),
@@ -136,6 +137,7 @@ export async function renderPaintSessionDialog(session, {
       brushSize: t("Dialog.Hint.BrushSize", "Brush diameter in pixels. Ctrl-wheel also changes this."),
       fillTolerance: t("Dialog.Hint.FillTolerance", "Lower is stricter, higher fills more similar colours."),
       hslFillBias: t("Dialog.Hint.HslFillBias", "-1 favors lightness, 0 balanced, 1 favors hue."),
+      progressiveFill: t("Dialog.Hint.ProgressiveFill", "Compare fill tolerance to the previous filled cell instead of only the clicked colour."),
       fillBridge: t("Dialog.Hint.FillBridge", "0 is strict; higher values cross small gaps."),
       fillHoles: t("Dialog.Hint.FillHoles", "Fill internal holes when calculating the final Region boundary."),
       gridStep: t("Dialog.Hint.GridStep", "1 is most precise; higher values are faster but coarser."),
@@ -151,6 +153,7 @@ export async function renderPaintSessionDialog(session, {
       brushSizePx: opts.brushSizePx,
       tolerance: opts.tolerance,
       hslFillBias: normalizeHslFillBias(opts.hslFillBias),
+      progressiveFill: opts.progressiveFill === true ? "checked" : "",
       fillBridgePx: opts.fillBridgePx,
       fillHoles: opts.fillHoles === true ? "checked" : "",
       gridStep: opts.gridStep,
@@ -278,7 +281,7 @@ export async function renderPaintSessionDialog(session, {
       if (input.name === "brushSizePx" && session.lastBrushPoint) {
         drawBrush?.(session, session.lastBrushPoint, session.paintMode ?? "add");
       }
-      if (["gridStep", "smoothing", "borderSmoothType", "featherShrinkPx", "paintBorderThickness", "paintOpacity", "debug", "paintColor", "fillHoles"].includes(input.name)) {
+      if (["gridStep", "smoothing", "borderSmoothType", "featherShrinkPx", "paintBorderThickness", "paintOpacity", "debug", "paintColor", "fillHoles", "progressiveFill"].includes(input.name)) {
         if (input.name === "gridStep") {
           if (session.gridStepUpdateTimer) clearTimeout(session.gridStepUpdateTimer);
           session.gridStepUpdateTimer = null;

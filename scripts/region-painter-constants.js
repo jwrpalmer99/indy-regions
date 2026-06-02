@@ -38,6 +38,7 @@ export const DEFAULT_PAINT_OPTIONS = Object.freeze({
   paintOpacity: 0.65,
   dialogScale: 1,
   hslFillBias: 0,
+  progressiveFill: false,
   paintBorderThickness: 2,
   fillHoles: false,
 });
